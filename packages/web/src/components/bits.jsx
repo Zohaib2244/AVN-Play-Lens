@@ -1,6 +1,6 @@
 // Small shared pieces: logo, icons, rail navigation.
 import { useApp, deviceName, viewStatus } from '../state.jsx';
-import { GamePicker } from './GamePicker.jsx';
+import { GameIcon } from './GameIcon.jsx';
 
 export function Logo({ size = 24 }) {
   return (
@@ -52,17 +52,23 @@ export function Toast() {
 
 // Every view is its own place, not a step in a sequence, so each gets its own icon tile and
 // the views that look inside a game sit under their own heading.
-const NAV = [
-  { id: 'home', title: 'Home', short: 'Home', icon: 'home', sub: () => ({ text: 'Devices and Unity' }) },
-  { id: 'logs', title: 'Logs', short: 'Logs', icon: 'logs', group: 'Look inside the game', sub: (st, ctx) => (ctx.stopped ? { text: 'Stopped', cls: 'warm' } : { text: 'Live' }) },
-  { id: 'performance', title: 'Performance', short: 'Perf', icon: 'pulse', needsGame: true, sub: (st) => st.performance },
-  { id: 'health', title: 'Plugin health', short: 'Health', icon: 'shield', needsGame: true, sub: (st) => st.health },
-  { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', needsGame: true, sub: (st) => st.firebase, go: (st) => (st.firebase.ready ? 'firebase' : 'firebase-setup'), also: ['firebase-setup'] },
-  { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', needsGame: true, sub: (st) => st.checklist, go: (st) => (st.checklist.ready ? 'checklist' : 'checklist-setup'), also: ['checklist-setup'] },
+const GLOBAL_NAV = [
+  { id: 'home', title: 'All games', short: 'Home', icon: 'home', sub: () => ({ text: 'Your library' }) },
+  { id: 'sessions', title: 'Sessions', short: 'Sessions', icon: 'logs', sub: () => ({ text: 'All saved captures' }) },
+  { id: 'devices', title: 'Devices', short: 'Devices', icon: 'qr', sub: () => ({ text: 'Connections & pairing' }) },
+];
+const GAME_NAV = [
+  { id: 'game', title: 'Overview', short: 'Game', icon: 'home', group: 'GAME WORKSPACE', sub: () => ({ text: 'Controls & details' }) },
+  { id: 'logs', title: 'Logs', short: 'Logs', icon: 'logs', sub: (st, ctx) => ({ text: ctx.stopped ? 'Stopped' : 'Game output' }) },
+  { id: 'performance', title: 'Performance', short: 'Perf', icon: 'pulse', sub: (st) => st.performance },
+  { id: 'health', title: 'Plugin health', short: 'Health', icon: 'shield', sub: (st) => st.health },
+  { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', sub: (st) => st.firebase, also: ['firebase-setup'] },
+  { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
+  { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
 ];
 
 export function Rail() {
-  const { view, setView, device, online, monitor, pkg, stopped, perfSummary } = useApp();
+  const { view, setView, device, online, monitor, pkg, stopped, perfSummary, game, inGameWorkspace, viewGameSessions } = useApp();
   const st = viewStatus(monitor, perfSummary);
   return (
     <aside className="rail-col">
@@ -70,8 +76,9 @@ export function Rail() {
         <Logo />
         <span className="px wm-text">AVN PlayLens</span>
       </button>
+      {inGameWorkspace && game && <button className="rail-game" onClick={() => setView('game')}><GameIcon game={game} size={40} paused={stopped} /><strong>{game.name}</strong></button>}
       <nav aria-label="Views" className="rail-nav">
-        {NAV.map((v) => {
+        {[...GLOBAL_NAV, ...(inGameWorkspace ? GAME_NAV : [])].map((v) => {
           const sub = v.sub(st, { stopped });
           const active = view === v.id || v.also?.includes(view);
           const locked = v.needsGame && !pkg;
@@ -79,7 +86,7 @@ export function Rail() {
           return (
             <div key={v.id} className="nav-slot">
               {v.group && <span className="nav-group eyebrow">{v.group}</span>}
-              <button className={`nav-item${active ? ' act' : ''}`} disabled={locked} onClick={() => setView(v.go?.(st) ?? v.id)} aria-current={active ? 'page' : undefined}>
+              <button className={`nav-item${active ? ' act' : ''}`} disabled={locked} onClick={() => v.id === 'sessions' ? viewGameSessions('__all') : setView(v.go?.(st) ?? v.id)} aria-current={active ? 'page' : undefined}>
                 <span className="nav-ico">
                   <Ico />
                   {!locked && sub.cls && <span className={`nav-pip ${sub.cls}`} />}
@@ -102,7 +109,7 @@ export function Rail() {
               <span className="rf-name">{deviceName(device)}</span>
               <span className="tag tag-plain rf-tag">{device.transport === 'wifi' ? 'Wi-Fi' : device.transport}</span>
             </div>
-            {online ? <GamePicker className="select rf-pick" /> : <div className="mono dim rf-sub">reconnecting to PlayLens…</div>}
+            {online ? <div className="dim rf-sub">{inGameWorkspace ? stopped ? 'Tracking stopped' : 'Tracking this game only' : 'Tracking paused'}</div> : <div className="mono dim rf-sub">reconnecting to PlayLens…</div>}
           </>
         ) : (
           <div className="dim" style={{ fontSize: 13.5 }}>{online ? 'No phone connected' : 'Starting…'}</div>

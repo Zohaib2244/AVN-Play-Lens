@@ -90,16 +90,16 @@ export function classify(entry, pkg, fromGame = true) {
   return e;
 }
 
-// Lines kept for one game: its own processes, Firebase lines (FA-SVC comes from Google
-// Play services, not the game), and system lines about the game crashing or hanging.
+// Keep only the game's processes and system diagnostics naming the exact package.
+// Shared Firebase service lines without a verified game PID are excluded.
 export function belongsToGame(entry, pkg, pids) {
-  if (pids.has(entry.pid)) return true;
-  if (entry.tag === 'FA' || entry.tag === 'FA-SVC') return true;
   if (!pkg) return false;
-  if (entry.tag === 'ActivityManager' || entry.tag === 'ActivityTaskManager' || entry.tag === 'DEBUG' || entry.tag === 'crash_dump' || entry.tag === 'libc') {
-    const text = entry.more ? entry.message + ' ' + entry.more.join(' ') : entry.message;
-    return text.includes(pkg);
-  }
+  if (pids.has(entry.pid)) return true;
+  const text = entry.more ? entry.message + ' ' + entry.more.join(' ') : entry.message;
+  const named = new RegExp(`(^|[^a-zA-Z0-9_.])${pkg.replace(/\./g, '\\.')}($|[^a-zA-Z0-9_.])`).test(text);
+  // Unattributed FA/FA-SVC lines may belong to any app on the phone.
+  if (entry.tag === 'FA' || entry.tag === 'FA-SVC') return false;
+  if (['ActivityManager', 'ActivityTaskManager', 'DEBUG', 'crash_dump', 'libc'].includes(entry.tag)) return named;
   return false;
 }
 

@@ -24,10 +24,12 @@ export class Health {
   reset() {
     this.hub = {};
     this.counters = {};
+    this.counterOffsets = {};
     this.adapters = {};
     this.adapterSummary = null;
     this.maxConfig = null;
     this.funnels = {};
+    this.unitSlots = {};
     this.rc = { fetch: null, sources: null, adConfig: null, adIds: null, customKeys: [] };
     this.revenue = { total: 0, byFormat: {}, byNetwork: {} };
     this.flags = {};
@@ -62,7 +64,7 @@ export class Health {
   }
 
   ingest(e) {
-    if (e.tag === 'ActivityManager' && /Start proc/.test(e.message)) {
+    if (e.tag === 'ActivityManager' && /Start proc/.test(e.message) && (!this.pkg || /Start proc \d+:([^/]+)\//.exec(e.message)?.[1] === this.pkg)) {
       this.reset();
       this.appStart = e.ts;
       this.processSeen = true;
@@ -90,7 +92,7 @@ export class Health {
       if (/TryShow blocked: .*level/i.test(a.message)) this.blocked.level++;
       if (/Firebase post-init:/.test(a.message)) this.ingestConsent(a.message, e);
       const f = this.funnel(a.key);
-      if (f) f.state = a.state;
+      if (f && a.state !== 'Info') { f.state = a.state; f.stateTs = e.ts; }
       if (a.key === 'SDK.RemoteConfig' && a.fetch) this.rc.fetch = { ...a.fetch, ts: e.ts };
       if (a.key === 'RemoteConfig.Values') {
         const custom = /Dispatched custom key=(\S+) source=(\w+)/.exec(a.message);
@@ -102,18 +104,35 @@ export class Health {
       }
     } else if (a.kind === 'counter') {
       this.counters[a.key] ??= {};
+      const previous = this.counters[a.key][a.name]?.value ?? 0;
       this.counters[a.key][a.name] = { value: a.value, reason: a.reason, ts: e.ts };
       const f = this.funnel(a.key);
       if (f) {
         const map = { LoadCallsSent: 'loadSent', AdsLoaded: 'loaded', LoadCallsFailed: 'loadFailed', ShowCallsSent: 'showSent', AdsDisplayed: 'displayed' };
-        if (map[a.name]) f[map[a.name]] = Math.max(f[map[a.name]], a.value);
+        const counterId = `${a.key}:${a.name}`;
+        // Plugin counters are process-wide. Count only increments observed in this capture.
+        this.counterOffsets[counterId] ??= Math.max(0, a.value - 1);
+        if (a.value < previous) this.counterOffsets[counterId] = Math.max(0, a.value - 1);
+        const observed = Math.max(0, a.value - this.counterOffsets[counterId]);
+        if (map[a.name]) f[map[a.name]] = Math.max(f[map[a.name]], observed);
+        const state = { LoadCallsSent: 'Loading', AdsLoaded: 'Loaded', LoadCallsFailed: 'Failed', ShowCallsSent: 'Showing', AdsDisplayed: 'Showed' }[a.name];
+        if (state && a.value > previous && e.ts >= (f.stateTs ?? 0)) { f.state = state; f.stateTs = e.ts; }
       }
       if (a.name === 'LoadCallsSent' && this.consent.firstAdRequest == null) this.consent.firstAdRequest = e.ts;
       if (a.name === 'AdsLoaded' && this.launch.firstAdLoaded == null) this.launch.firstAdLoaded = e.ts;
     } else if (a.kind === 'callback') {
+      if (a.ignored) return;
       const key = a.format === 'interstitial' ? `Ad.Interstitial.${a.fields.slot ?? this.slotForUnit(a.fields.unit) ?? 0}` : 'Ad.Rewarded';
       const f = this.funnel(key);
       if (f) {
+        const state = { Loaded: 'Loaded', LoadFailed: 'Failed', Displayed: 'Showed', DisplayFailed: 'Failed', Closed: 'Closed', Hidden: 'Closed' }[a.callback];
+        if (state && e.ts >= (f.stateTs ?? 0)) { f.state = state; f.stateTs = e.ts; }
+        const metric = { Loaded: 'loaded', LoadFailed: 'loadFailed' }[a.callback];
+        if (metric) {
+          f.callbackCounts ??= {};
+          f.callbackCounts[metric] = (f.callbackCounts[metric] ?? 0) + 1;
+          f[metric] = Math.max(f[metric], f.callbackCounts[metric]);
+        }
         if (a.fields.network) f.lastNetwork = a.fields.network;
         if (a.callback === 'Displayed') f.shown++;   // the SDK confirming the ad appeared
         if (a.callback === 'Closed') f.closed++;

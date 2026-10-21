@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp, deviceName, clock, secs } from '../state.jsx';
 import { PageHead, Check, Lattice } from '../components/bits.jsx';
+import { StateBadge } from '../components/StateBadge.jsx';
 import { Disclosure, Skeleton } from '../components/ui.jsx';
 
 const STEP_NAMES = { awake: 'Awake', start: 'Start', accepted: 'Init accepted', max: 'MAX', firebase: 'Firebase', admob: 'AdMob', rc: 'Remote config', done: 'Init done', autoload: 'Auto-load' };
@@ -64,22 +65,19 @@ function RcValue({ v }) {
   );
 }
 
-function sdkTag(card) {
-  if (card.notUsed) return ['Not used', 'tag-plain'];
-  if (card.noLogs) return ['No logs', 'tag-plain'];
-  if (!card.state) return ['Not seen', 'tag-plain'];
-  if (card.state === 'Initialized') return ['Ready', 'tag-ok'];
-  if (card.state === 'Failed') return ['Failed', 'tag-bad'];
-  return [card.state, 'tag-warm'];
+function sdkState(card) {
+  if (card.notUsed) return 'Not used';
+  if (card.noLogs) return 'No logs';
+  return card.state || 'Not seen';
 }
 
 function SdkCard({ card, extra }) {
-  const [label, cls] = sdkTag(card);
+  const state = sdkState(card);
   return (
     <div className={`card sdk${card.notUsed || card.noLogs ? ' na' : ''}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <span style={{ fontWeight: 700, fontSize: 16 }} className={card.notUsed || card.noLogs ? 'mute' : ''}>{card.label}</span>
-        <span className={`tag ${cls}`}>{label}</span>
+        <StateBadge state={state} label={state === 'Initialized' ? 'Ready' : state} />
       </div>
       {card.notUsed && <span className="dim" style={{ fontSize: 13.5 }}>USE_BYTEBREW is off for this game (set byteBrew: true in its rules file if it's on).</span>}
       {card.noLogs && <span className="dim" style={{ fontSize: 13.5 }}>The plugin can't log AppsFlyer's start. Turn on isDebug to see AppsFlyer's own lines.</span>}
@@ -266,7 +264,6 @@ export function Health() {
             {h.funnels.map((f) => {
               const shown = f.format === 'banner' || f.format === 'mrec' || f.format === 'app-open' ? f.displayed : f.shown;
               const fill = f.loadSent ? Math.min(100, Math.round((f.loaded / f.loadSent) * 100)) : 0;
-              const stateCls = f.state === 'Failed' ? 'tag-warn' : f.state === 'Loaded' || f.state === 'Showed' || f.state === 'Showing' ? 'tag-ok' : 'tag-plain';
               return (
                 <div key={f.key} className="funnel">
                   <span>
@@ -279,7 +276,7 @@ export function Health() {
                   <span className="num">{shown}</span>
                   <span className="num mute">{f.format === 'banner' || f.format === 'mrec' ? '–' : f.closed}</span>
                   <span className="num" style={{ color: 'var(--ok)' }}>{f.paid}</span>
-                  <span style={{ textAlign: 'right' }}><span className={`tag ${stateCls}`}>{f.state ?? '—'}</span></span>
+                  <span style={{ textAlign: 'right' }}><StateBadge state={f.state} /></span>
                 </div>
               );
             })}
@@ -337,7 +334,7 @@ export function Health() {
               <div key={a.name} className="arow">
                 <span className={`sq ${a.status === 'InitializedSuccess' ? 'ok' : a.status === 'InitializedFailure' ? 'bad' : ''}`} />
                 <span style={{ flex: '1 1 auto' }}>{a.name}</span>
-                <span className="mono dim" style={{ fontSize: 12.5 }}>{{ InitializedSuccess: 'started', InitializedFailure: 'failed', NotInitialized: 'not started', NotReported: 'not reported' }[a.status] ?? a.status}</span>
+                <StateBadge state={a.status} label={{ InitializedSuccess: 'started', InitializedFailure: 'failed', NotInitialized: 'not started', NotReported: 'not reported', InitializedUnknown: 'unknown', DoesNotApply: 'not applicable' }[a.status] ?? a.status} />
               </div>
             ))}
             <div className="dim" style={{ fontSize: 12.5, padding: '10px 0 8px', borderTop: '1px solid var(--line-soft)' }}>Not started is fine if that network isn't on any of your ad units.</div>

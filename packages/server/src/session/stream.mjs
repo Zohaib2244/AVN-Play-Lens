@@ -21,9 +21,12 @@ export class LogStream extends EventEmitter {
     this.grouper = new Grouper((e) => this.accept(e));
   }
 
-  start() {
-    this.source.start(
+  async start() {
+    this.stopped = false;
+    if (this.pkg) await this.refreshPids();
+    const ready = this.source.start(
       (line) => {
+        if (this.stopped) return;
         const parsed = parseLogcatLine(line);
         if (parsed) this.grouper.push(parsed);
       },
@@ -35,6 +38,7 @@ export class LogStream extends EventEmitter {
       this.refreshPids();
       this.pidTimer = setInterval(() => this.refreshPids(), 1500);
     }
+    return ready;
   }
 
   setState(state, reason) {
@@ -80,7 +84,20 @@ export class LogStream extends EventEmitter {
     return Math.round(this.counts.recent.reduce((s, r) => s + r.n, 0) / 5);
   }
 
+  pause() {
+    this.stopped = true;
+    clearInterval(this.batchTimer);
+    clearInterval(this.pidTimer);
+    this.grouper.flush();
+    this.flushBatch();
+    this.source.stop();
+    this.setState('paused');
+  }
+
+  resume() { return this.start(); }
+
   stop() {
+    this.stopped = true;
     clearInterval(this.batchTimer);
     clearInterval(this.pidTimer);
     this.grouper.flush();
@@ -93,23 +110,41 @@ export class LogStream extends EventEmitter {
 export function adbSource(adb, serial, { history = false } = {}) {
   let proc = null;
   let stopped = false;
+  let generation = 0;
   return {
     start(onLine, onEnd) {
-      const args = ['logcat', '-v', 'threadtime', '-v', 'epoch', '-b', 'main,system,crash'];
-      if (!history) args.push('-T', '1');
-      proc = adb.spawn(args, { serial });
-      let rest = '';
-      proc.stdout.setEncoding('utf8');
-      proc.stdout.on('data', (chunk) => {
-        const lines = (rest + chunk).split(/\r?\n/);
-        rest = lines.pop();
-        for (const l of lines) onLine(l);
-      });
-      proc.on('exit', () => !stopped && onEnd('logcat stopped (device disconnected?)'));
-      proc.on('error', (err) => onEnd(err.message));
+      stopped = false;
+      const token = ++generation;
+      const launch = (since) => {
+        if (stopped || token !== generation) return;
+        const args = ['logcat', '-v', 'threadtime', '-v', 'epoch', '-b', 'main,system,crash'];
+        if (!history) args.push('-T', since || '1');
+        proc = adb.spawn(args, { serial });
+        let rest = '';
+        proc.stdout.setEncoding('utf8');
+        proc.stdout.on('data', (chunk) => {
+          if (stopped || token !== generation) return;
+          const lines = (rest + chunk).split(/\r?\n/);
+          rest = lines.pop();
+          for (const l of lines) {
+            // A count-based tail can include the previous session's last event.
+            if (since && (parseLogcatLine(l)?.ts ?? 0) < Number(since) * 1000) continue;
+            onLine(l);
+          }
+        });
+        proc.on('exit', () => !stopped && token === generation && onEnd('logcat stopped (device disconnected?)'));
+        proc.on('error', (err) => !stopped && token === generation && onEnd(err.message));
+      };
+      // Read the phone's clock, avoiding assumptions about host/device clock skew.
+      if (history) return launch(null);
+      return adb.shell(serial, 'date +%s.%N', { timeout: 3000 }).then((out) => {
+        const ts = out.trim();
+        launch(/^\d+\.\d+$/.test(ts) ? ts : null);
+      }).catch(() => launch(null));
     },
     stop() {
       stopped = true;
+      generation++;
       proc?.kill();
     },
     pids: (pkg) => pidsOf(adb, serial, pkg),

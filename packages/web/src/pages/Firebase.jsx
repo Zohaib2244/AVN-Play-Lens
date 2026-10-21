@@ -39,13 +39,14 @@ function Stepper({ step, labels }) {
 export { Stepper };
 
 export function FirebaseSetup() {
-  const { serial, pkg, device, monitor, send, setView, showToast, stream } = useApp();
+  const { serial, pkg, device, monitor, send, setView, showToast, stream, captureVersion } = useApp();
   const appAction = useAppAction();
   const [step, setStep] = useState(1);
   const [restarted, setRestarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [commands, setCommands] = useState([]);
   const baseCount = useRef(null);
+  useEffect(() => { baseCount.current = null; }, [captureVersion]);
   const fb = monitor?.firebase;
   const debugOn = !!fb?.debug?.on;
   const replay = !!device?.replay;

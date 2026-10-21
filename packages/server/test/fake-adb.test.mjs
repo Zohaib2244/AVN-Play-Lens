@@ -35,6 +35,7 @@ test('fake adb: devices, QR pairing, live logcat', { skip: process.platform === 
   });
   try {
     const usb = await until(async () => (await get('devices')).find((d) => d.serial === 'FAKE123' && d.info?.model));
+    await fetch(base + 'games', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Demo', packageId: 'com.avn.demo' }) });
     assert.equal(usb.info.model, 'Pixel 7');
     assert.equal(usb.info.battery, 71);
     assert.equal((await get('status')).adbVersion, '35.0.2');

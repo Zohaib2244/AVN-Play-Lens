@@ -45,10 +45,10 @@ test('classify: AVN, Unity exception, Firebase, crashes', () => {
   assert.equal(classify({ tag: 'ActivityManager', level: 'E', message: 'ANR in a.b (a.b/.Main)' }, 'a.b').kind, 'anr');
 });
 
-test('game filter keeps its pids, Firebase and crash lines about it', () => {
+test('game filter keeps its own processes and attributed system lines, rejects unowned Firebase', () => {
   const pids = new Set([10]);
   assert.equal(belongsToGame({ pid: 10, tag: 'Unity', message: '' }, 'a.b', pids), true);
-  assert.equal(belongsToGame({ pid: 99, tag: 'FA-SVC', message: '' }, 'a.b', pids), true);
+  assert.equal(belongsToGame({ pid: 99, tag: 'FA-SVC', message: '' }, 'a.b', pids), false);
   assert.equal(belongsToGame({ pid: 99, tag: 'ActivityManager', message: 'ANR in a.b' }, 'a.b', pids), true);
   assert.equal(belongsToGame({ pid: 99, tag: 'chatty', message: 'x' }, 'a.b', pids), false);
   assert.equal(startedPid({ tag: 'ActivityManager', message: 'Start proc 18342:a.b/u0a1 for top-activity' }, 'a.b'), 18342);
@@ -93,7 +93,7 @@ test('server: other websites are refused, replay stream works', async () => {
   const port = 7499;
   const replay = { file: FIXTURE, pkg: 'com.avn.demo', device: replayDevice('com.avn.demo') };
   const srv = createServer({
-    port, staticDir: null, record: false, adb: null, pairing: null, replay,
+    port, staticDir: null, record: false, adb: null, pairing: null, replay, games: { list: () => [{ packageId: 'com.avn.demo', name: 'Demo' }] },
     devices: () => [replay.device], onDevices: () => {}, status: () => ({ replay: true }),
   });
   await srv.listen();
@@ -122,4 +122,14 @@ test('server: other websites are refused, replay stream works', async () => {
   } finally {
     await srv.close();
   }
+});
+
+test('strict game attribution excludes other games and unattributed Firebase events', () => {
+  const pids = new Set([123]);
+  assert.equal(belongsToGame({ pid: 123, tag: 'FA', message: 'Logging event (FE): mine' }, 'com.demo.game', pids), true);
+  assert.equal(belongsToGame({ pid: 999, tag: 'FA', message: 'Logging event (FE): another_game' }, 'com.demo.game', pids), false);
+  assert.equal(belongsToGame({ pid: 999, tag: 'FA-SVC', message: 'Logging event: origin=app,name=unattributed' }, 'com.demo.game', pids), false);
+  assert.equal(belongsToGame({ pid: 999, tag: 'FA-SVC', message: 'Logging event (FE): recommended_app, Bundle[{app=com.demo.game}]' }, 'com.demo.game', pids), false);
+  assert.equal(belongsToGame({ pid: 999, tag: 'ActivityManager', message: 'ANR in com.demo.game.other' }, 'com.demo.game', pids), false);
+  assert.equal(belongsToGame({ pid: 999, tag: 'ActivityManager', message: 'Start proc 123:com.demo.game/u0a1' }, 'com.demo.game', pids), true);
 });

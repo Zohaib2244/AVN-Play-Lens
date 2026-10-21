@@ -44,6 +44,14 @@ PlayLens uses the same adb as Unity. It looks for adb in this order: the `PLAYLE
 
 Options: `--port 7500`, `--no-open`, `--replay [file]`.
 
+## Manage paired phones
+
+On Home, each remembered Wi-Fi phone has **Disconnect**, **Reconnect**, and **Forget / unpair…** controls. Disconnect pauses PlayLens's auto-reconnect, including across restarts; Reconnect resumes it. Remembered phones remain available here while disconnected.
+
+Forget disconnects the phone and removes it from PlayLens. To fully revoke Android's pairing, follow the on-screen instructions: on the phone, open **Developer options → Wireless debugging → Paired devices**, select this computer, and tap **Forget**. ADB's own auto-discovery can reconnect a trusted phone until that final step is done.
+
+PlayLens reuses ADB's automatic Wi-Fi connection and removes duplicate IP connections for remembered phones, so Unity sees one Wi-Fi target per phone. USB and Wi-Fi remain separate transports if both are connected.
+
 ## Try it without a phone
 
 ```bash
@@ -71,9 +79,27 @@ Each game gets one YAML file in `~/.avn-playlens/rules/<package>.yaml` (Checklis
 
 The plugin checks themselves are in `rules/packs/avn-plugin.yaml`, written from `docs/AVN_PLUGIN_LOG_REFERENCE.md`.
 
+## Game workspaces
+
+Home is your game library. Add a game name, Android package ID (for example `com.studio.game`) and optional PNG, JPEG or WebP icon (up to 250 KB). Icons and game IDs stay in `~/.avn-playlens/games.json`. Open a tile to enter its workspace; edit the ID or icon and remove the library entry from that game's page. Removing an entry keeps the installed game and saved captures.
+
+The game workspace contains the installed version/build, device selector, Start/Restart/Stop controls, and links to Logs, Performance, Plugin health, Firebase and Checklist. Its recent sessions appear below; **Game sessions** opens the full history for that game. The global **Sessions** page has all saved captures grouped/filterable by game. Home has no session bar, history feed or playback controls.
+
+Tracking starts only inside an installed, registered game's workspace. Home, Devices, pairing and global history pause the logcat source, analysis updates and performance sampling. Game tiles show a pause marker. Returning to the same game resumes its current session from the phone's current log time; events produced during the pause are not backfilled. Reviewing an archived capture also pauses live collection. Switching games or devices starts a separate capture.
+
+PlayLens rejects device-wide and unregistered-game captures. It accepts only log lines from the selected game's processes, plus system crash/launch diagnostics naming that exact package. Firebase lines from unknown/shared service PIDs are excluded, so other apps' events cannot enter the selected game's counts.
+
+Connected devices are summarized in Home's header. **Devices** contains pairing, connection controls and the option to connect another phone. When no phone is connected, Home shows a connect prompt.
+
+## Sessions and history
+
+Each game's capture numbers advance independently: **Session 1**, **Session 2**, and so on, with start time and installed version when available. The session bar lives inside game workspaces. **New session / clear** offers **Save & start new** or **Discard & start new**; both reset logs, Firebase events, ad state and performance together. Discard also removes a previously saved copy of the current capture. **Save session** keeps short captures immediately.
+
+A detected new main game process starts a separate session. Switching between that game's monitoring views keeps the same capture. Global history lets you review Firebase events, search logs, inspect ad state, export, and delete completed captures. A paused capture can be resumed or discarded from its game workspace.
+
 ## What gets saved
 
-Everything stays in `~/.avn-playlens/` on your computer: `rules/`, `sessions/` (each log stream gzipped, plus its performance samples, last 50), `reports/` (test-run reports), `devices.json` (paired Wi-Fi phones). Use `--no-record` to skip saving sessions.
+Everything stays in `~/.avn-playlens/` on your computer: `rules/`, `sessions/` (each log stream gzipped, plus its performance samples, last 50 per game), `reports/` (test-run reports), `devices.json` (paired Wi-Fi phones). Use `--no-record` to skip saving sessions.
 
 ## Layout
 

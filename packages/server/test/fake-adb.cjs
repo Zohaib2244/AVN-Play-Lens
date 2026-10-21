@@ -8,7 +8,7 @@ if (args[0] === '-s') { serial = args[1]; args = args.slice(2); }
 const out = (s) => process.stdout.write(s);
 const devices = () => {
   let l = 'FAKE123\tdevice product:panther model:Pixel_7 device:panther transport_id:1\n';
-  if (fs.existsSync(st('connected'))) l += '192.168.1.50:37115\tdevice product:dm1q model:SM_S911B device:dm1q transport_id:2\n';
+  if (fs.existsSync(st('connected'))) l += 'adb-WIFI999-AbCd._adb-tls-connect._tcp\tdevice product:dm1q model:SM_S911B device:dm1q transport_id:2\n';
   return l;
 };
 const cmd = args[0];
@@ -17,18 +17,27 @@ else if (cmd === 'track-devices') {
   let last = '';
   const tick = () => { const p = devices(); if (p !== last) { last = p; out(p.length.toString(16).padStart(4, '0') + p); } };
   tick(); setInterval(tick, 300);
+} else if (cmd === 'devices') { out('List of devices attached\n' + devices());
+} else if (cmd === 'disconnect') { fs.rmSync(st('connected'), { force: true }); out(`disconnected ${args[1]}\n`);
 } else if (cmd === 'mdns') {
   let s = 'List of discovered mdns services\n';
   if (fs.existsSync(st('qrname'))) s += `${fs.readFileSync(st('qrname'), 'utf8').trim()}\t_adb-tls-pairing._tcp\t192.168.1.50:40123\n`;
   if (fs.existsSync(st('paired'))) s += 'adb-WIFI999-AbCd\t_adb-tls-connect._tcp\t192.168.1.50:37115\n';
   out(s);
-} else if (cmd === 'pair') { fs.writeFileSync(st('paired'), '1'); out(`Successfully paired to ${args[1]} [guid=adb-WIFI999-AbCd]\n`); }
+} else if (cmd === 'pair') { fs.writeFileSync(st('paired'), '1'); fs.writeFileSync(st('connected'), '1'); out(`Successfully paired to ${args[1]} [guid=adb-WIFI999-AbCd]\n`); }
 else if (cmd === 'connect') { fs.writeFileSync(st('connected'), '1'); out(`connected to ${args[1]}\n`); }
 else if (cmd === 'shell') {
   const c = args.slice(1).join(' ');
+  const active = () => fs.existsSync(st('active-package')) ? fs.readFileSync(st('active-package'), 'utf8') : 'com.avn.demo';
   const propsFile = st('props.json');
   const props = fs.existsSync(propsFile) ? JSON.parse(fs.readFileSync(propsFile, 'utf8')) : {};
-  if (c.startsWith('getprop debug.firebase')) out(`${props['debug.firebase.analytics.app'] || ''}\n${props['log.tag.FA'] || ''}\n${props['log.tag.FA-SVC'] || ''}\n`);
+  if (c.startsWith('monkey -p ') || c.startsWith('am force-stop ')) {
+    fs.appendFileSync(st('actions.jsonl'), JSON.stringify({ command: c, at: Date.now() }) + '\n');
+    const pkg = c.split(' ')[2];
+    if (c.startsWith('monkey')) { fs.writeFileSync(st('active-package'), pkg); out('Events injected: 1\n'); }
+    else if (active() === pkg) fs.writeFileSync(st('active-package'), '');
+  }
+  else if (c.startsWith('getprop debug.firebase')) out(`${props['debug.firebase.analytics.app'] || ''}\n${props['log.tag.FA'] || ''}\n${props['log.tag.FA-SVC'] || ''}\n`);
   else if (c.startsWith('setprop')) {
     for (const part of c.split(';')) { const m = /setprop (\S+) (\S+)/.exec(part.trim()); if (m) props[m[1]] = m[2]; }
     fs.writeFileSync(propsFile, JSON.stringify(props));
@@ -37,7 +46,7 @@ else if (cmd === 'shell') {
   else if (c.startsWith('for p in')) out('98000000\n');
   else if (c.startsWith('pm path')) out('package:/data/app/~~x/com.avn.demo-1/base.apk\n');
   else if (c.startsWith('cat /sys/devices/system/cpu/possible')) out('0-7\n__PLAYLENS__\n/sys/kernel/gpu/gpu_busy\n');
-  else if (c.startsWith('pidof')) out('18342\n');
+  else if (c.startsWith('pidof')) out(active() && c.includes(active()) ? '18342\n' : '');
   else if (c.startsWith('dumpsys SurfaceFlinger --list')) out('SurfaceView[com.avn.demo/com.unity3d.player.UnityPlayerActivity](BLAST)#88\nStatusBar#2\n');
   else if (c.startsWith('cat /proc/18342/stat')) {
     const now = process.hrtime.bigint();
@@ -51,8 +60,8 @@ else if (cmd === 'shell') {
   }
   else if (c.startsWith('getprop')) out('[ro.product.model]: [' + (serial === 'FAKE123' ? 'Pixel 7' : 'Galaxy S23') + ']\n[ro.product.manufacturer]: [Google]\n[ro.build.version.release]: [14]\n[ro.build.version.sdk]: [34]\n__PLAYLENS__\nCurrent Battery Service state:\n  level: 71\n');
   else if (c.startsWith('pm list')) out('package:com.avn.demo\npackage:com.other.app\n');
-  else if (c.startsWith('dumpsys activity')) out('  topResumedActivity=ActivityRecord{8d1 u0 com.avn.demo/com.unity3d.player.UnityPlayerActivity t42}\n');
-  else if (c.startsWith('ps')) out('  PID NAME\n18342 com.avn.demo\n1 init\n');
+  else if (c.startsWith('dumpsys activity')) out(active() ? `  topResumedActivity=ActivityRecord{8d1 u0 ${active()}/com.unity3d.player.UnityPlayerActivity t42}\n` : '');
+  else if (c.startsWith('ps')) out(`  PID NAME\n${active() ? '18342 ' + active() + '\n' : ''}1 init\n`);
   else out('');
 } else if (cmd === 'logcat') {
   const lines = fs.readFileSync(process.env.FAKE_LOG, 'utf8').split('\n').filter((l) => /^\d/.test(l));

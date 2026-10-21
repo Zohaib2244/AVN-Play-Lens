@@ -9,10 +9,11 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { GameLibrary } from '../src/games/library.mjs';
 import { Adb } from '../src/adb/client.mjs';
 import { locateAdb } from '../src/adb/locate.mjs';
 import { DeviceTracker } from '../src/adb/tracker.mjs';
-import { Pairing, KeepAlive, DeviceStore } from '../src/wifi/pairing.mjs';
+import { Pairing, KeepAlive, DeviceStore, WifiConnections } from '../src/wifi/pairing.mjs';
 import { replayDevice } from '../src/replay/source.mjs';
 import { RulesStore, BUNDLED_PACKS } from '../src/rules/loader.mjs';
 import { EMBEDDED } from '../src/embedded.mjs';
@@ -58,8 +59,9 @@ const adbVersion = adb ? await adb.version().catch(() => null) : null;
 
 const tracker = adb ? new DeviceTracker(adb) : null;
 const store = new DeviceStore();
-const pairing = adb ? new Pairing(adb, store) : null;
-const keepAlive = adb && tracker ? new KeepAlive(adb, store, tracker) : null;
+const connections = adb ? new WifiConnections(adb, store) : null;
+const pairing = adb ? new Pairing(adb, store, connections) : null;
+const keepAlive = adb && tracker ? new KeepAlive(adb, store, tracker, 10000, connections) : null;
 const replay = replayFile ? { file: replayFile, pkg: 'com.avn.demo', device: replayDevice('com.avn.demo') } : null;
 
 const rules = new RulesStore({ packsDir: paths.packs });
@@ -73,6 +75,9 @@ const ctx = {
   port,
   adb,
   pairing,
+  games: new GameLibrary(),
+  connections,
+  store,
   replay,
   rules,
   record: !flag('--no-record'),

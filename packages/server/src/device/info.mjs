@@ -57,12 +57,17 @@ export async function isDebuggable(adb, serial, pkg) {
   return /DEBUGGABLE/.test(out);
 }
 
+async function launchApp(adb, serial, pkg) {
+  const output = await adb.shell(serial, `monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`);
+  if (/No activities found|monkey aborted|Error:|Permission Denial/i.test(output)) throw new Error(output.trim());
+  return output;
+}
 export const appActions = {
-  launch: (adb, serial, pkg) => adb.shell(serial, `monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`),
+  launch: launchApp,
   stop: (adb, serial, pkg) => adb.shell(serial, `am force-stop ${pkg}`),
   async restart(adb, serial, pkg) {
     await adb.shell(serial, `am force-stop ${pkg}`);
-    return adb.shell(serial, `monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`);
+    return launchApp(adb, serial, pkg);
   },
 };
 

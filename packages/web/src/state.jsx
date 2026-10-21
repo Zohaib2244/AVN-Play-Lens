@@ -6,6 +6,7 @@ import { api, connectSocket } from './api.js';
 
 const AppContext = createContext(null);
 const MAX_LINES = 50000;
+const GAME_VIEWS = new Set(['game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'checklist', 'checklist-setup', 'game-sessions']);
 const ALERT_KINDS = { exception: 'Unity exception', 'java-crash': 'App crashed (Java)', 'native-crash': 'App crashed (native)', anr: 'App not responding (ANR)' };
 
 export function AppProvider({ children }) {
@@ -16,16 +17,35 @@ export function AppProvider({ children }) {
   const [view, setView] = useState('home');
   const [serial, setSerial] = useState(null);
   const [pkg, setPkg] = useState(null);
+  const [games, setGames] = useState([]);
+  const [gamesLoaded, setGamesLoaded] = useState(false);
+  const [gamesError, setGamesError] = useState('');
+  const [gameInventory, setGameInventory] = useState({ serial: null, games: [] });
+  const [inventoryError, setInventoryError] = useState('');
+  const [actionBusy, setActionBusy] = useState(null);
+  const [archiveReturn, setArchiveReturn] = useState('sessions');
+  const captureIdentity = useRef(null);
+  const displayedIdentity = useRef(null);
+  const collectionAllowed = useRef(false);
+  const [historyGame, setHistoryGame] = useState('__all');
+  const captureWaiter = useRef(null);
+  const refreshInventoryRef = useRef(null);
   // "Follow the open app" picks whichever installed game is in front on the phone; choosing a
   // game by hand turns it off. The list of installed games is kept fresh here so every page's
   // picker shows apps installed after PlayLens started.
-  const [follow, setFollow] = useState(true);
+  const [follow, setFollow] = useState(false);
   const [apps, setApps] = useState({ serial: null, packages: [], foreground: null });
   const [version, setVersion] = useState(0);
   const [stream, setStream] = useState({ state: 'idle', running: false });
   const [rate, setRate] = useState(0);
   const [monitor, setMonitor] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [session, setSession] = useState(null);
+  const [captureVersion, setCaptureVersion] = useState(0);
+  const [captureRequest, setCaptureRequest] = useState(0);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [archivedId, setArchivedId] = useState(null);
+  const disposition = useRef('save');
   const [toast, setToast] = useState(null);
   const [alerts, setAlerts] = useState(true);
   const [lastReport, setLastReport] = useState(null);
@@ -48,6 +68,24 @@ export function AppProvider({ children }) {
     toastTimer.current = setTimeout(() => setToast(null), 6000);
   }, []);
 
+  const resetCapture = useCallback(() => {
+    cancelAnimationFrame(raf.current);
+    lines.current = [];
+    groups.current = new Map();
+    perf.current = [];
+    setPerfSummary(null);
+    setMonitor(null);
+    setSession(null);
+    setSessionId(null);
+    setRate(0);
+    setFocusEntry(null);
+    setLastReport(null);
+    setToast(null);
+    setVersion((v) => v + 1);
+    setPerfVersion((v) => v + 1);
+    setCaptureVersion((v) => v + 1);
+  }, []);
+
   useEffect(() => {
     socket.current = connectSocket((msg) => {
       if (msg.type === 'hello') {
@@ -59,11 +97,19 @@ export function AppProvider({ children }) {
       if (msg.type === 'devices') return setDevices(msg.devices);
       if (msg.type === 'pair') return setPair(msg);
       if (msg.type === 'error') return showToast({ title: 'Something went wrong', msg: msg.message });
+      if (!collectionAllowed.current && ['log.batch', 'monitor', 'perf', 'alert', 'run.report'].includes(msg.type)) return;
       if (msg.type === 'run.report') return setLastReport(msg);
       if (msg.streamId !== undefined && msg.streamId !== streamId.current) return;
       if (msg.type === 'stream.state') setStream(msg);
       else if (msg.type === 'monitor') setMonitor(msg);
-      else if (msg.type === 'session') setSessionId(msg.id);
+      else if (msg.type === 'session') {
+        if (msg.reset) resetCapture();
+        setSessionId(msg.id);
+        setSession(msg);
+        if (msg.paused !== undefined) setStream((s) => ({ ...s, state: msg.paused ? 'paused' : ['ended', 'error'].includes(s.state) ? s.state : 'live' }));
+        if (captureWaiter.current?.pkg === msg.pkg && captureWaiter.current?.serial === msg.serial) captureWaiter.current.resolve(msg);
+        setHistoryVersion((v) => v + 1);
+      }
       else if (msg.type === 'alert') {
         // Only serious problems pop up; warnings wait in Plugin health so they don't interrupt.
         if (alertsRef.current && msg.severity === 'critical') showToast({ title: msg.title, msg: msg.message, severity: msg.severity });
@@ -85,13 +131,38 @@ export function AppProvider({ children }) {
       }
     }, setOnline);
     return () => socket.current.close();
-  }, [showToast]);
+  }, [showToast, resetCapture]);
+
+  const reloadGames = useCallback(async ({ previousPackage, nextPackage } = {}) => {
+    try { setGames(await api('games')); if (previousPackage && nextPackage) setPkg((p) => p === previousPackage ? nextPackage : p); setGamesError(''); setGamesLoaded(true); }
+    catch (err) { setGamesError(err.message); }
+  }, []);
+  useEffect(() => {
+    if (!online) return;
+    reloadGames();
+    const timer = setInterval(reloadGames, 10000);
+    return () => clearInterval(timer);
+  }, [online, reloadGames]);
+
+  useEffect(() => {
+    if (!serial || !online || !gamesLoaded) return;
+    let alive = true;
+    const load = async (force = false) => {
+      try {
+        const list = await api(`devices/${encodeURIComponent(serial)}/games${force === true ? '?refresh=1' : ''}`);
+        if (alive) { setGameInventory({ serial, games: list }); setInventoryError(''); }
+      } catch (err) { if (alive) setInventoryError(err.message); }
+    };
+    refreshInventoryRef.current = load;
+    load();
+    const timer = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(timer); refreshInventoryRef.current = null; };
+  }, [serial, online, games, gamesLoaded]);
 
   // Switching phones starts over: the game on the old phone may not exist on the new one.
   const selectDevice = useCallback((d) => {
     setSerial(d.serial);
-    setPkg(d.replay ? d.packages[0] : null);
-    setFollow(!d.replay);
+    setFollow(false);
   }, []);
 
   // Keep a sensible device selected: the current one if still there, else the first ready phone.
@@ -100,7 +171,7 @@ export function AppProvider({ children }) {
     if (!ready.some((d) => d.serial === serial)) {
       const next = ready.find((d) => !d.replay) ?? ready[0] ?? null;
       if (next) selectDevice(next);
-      else { setSerial(null); setPkg(null); }
+      else setSerial(null);
     }
   }, [devices, serial, selectDevice]);
 
@@ -116,12 +187,14 @@ export function AppProvider({ children }) {
     const t = setInterval(load, follow ? 3000 : 8000);
     return () => { alive = false; clearInterval(t); };
   }, [serial, online, follow, replayDevice]);
-  const refreshApps = useCallback(() => loadApps.current?.(), []);
+  const refreshApps = useCallback(() => { loadApps.current?.(); refreshInventoryRef.current?.(true); }, []);
 
   useEffect(() => {
-    if (!follow || apps.serial !== serial) return;
-    if (apps.foreground && apps.packages.includes(apps.foreground) && apps.foreground !== pkg) setPkg(apps.foreground);
-  }, [follow, apps, serial, pkg]);
+    if (gamesLoaded && pkg && !games.some((g) => g.packageId === pkg)) {
+      setPkg(null);
+      setView('home');
+    }
+  }, [games, gamesLoaded, pkg]);
 
   const send = useCallback((msg) => socket.current?.send(msg), []);
 
@@ -130,33 +203,95 @@ export function AppProvider({ children }) {
   const [stopped, setStopped] = useState(false);
   useEffect(() => setStopped(false), [serial, pkg]);
 
-  // One stream per device + game, independent of the view.
+  const game = games.find((g) => g.packageId === pkg) || null;
+  const inGameWorkspace = !!game && (GAME_VIEWS.has(view) || (view === 'saved-session' && archiveReturn === 'game-sessions'));
+  const installedGame = gameInventory.serial === serial && gameInventory.games.find((g) => g.packageId === pkg)?.installed;
+  const captureEnabled = inGameWorkspace && view !== 'saved-session' && !!installedGame;
   useEffect(() => {
-    if (!serial || !online) return undefined;
-    if (stopped) {
-      streamId.current++;   // ignore anything the old stream still sends
-      setStream((s) => ({ ...s, state: 'stopped' }));
-      return undefined;
+    const identity = `${serial}:${pkg}`;
+    if (displayedIdentity.current !== identity) {
+      displayedIdentity.current = identity;
+      captureIdentity.current = null;
+      resetCapture();
     }
-    lines.current = [];
-    groups.current = new Map();
-    perf.current = [];
-    setPerfSummary(null);
-    setMonitor(null);
-    setStream({ state: 'starting', running: false });
-    setVersion((v) => v + 1);
-    const id = ++streamId.current;
-    send({ type: 'stream.start', serial, pkg, all: !pkg, streamId: id });
-    return () => send({ type: 'stream.stop' });
-  }, [serial, pkg, online, send, stopped]);
+  }, [serial, pkg, resetCapture]);
+  collectionAllowed.current = captureEnabled && !stopped;
+
+  // Home and global pages pause the source and sampler, keeping this capture resumable.
+  useEffect(() => {
+    if (!online) { captureIdentity.current = null; return; }
+    if (!captureEnabled || !serial || !gamesLoaded) {
+      setStream((s) => ({ ...s, state: 'paused' }));
+      return;
+    }
+    if (stopped) {
+      send({ type: 'stream.stop', previous: 'save' });
+      captureIdentity.current = null;
+      setStream((s) => ({ ...s, state: 'stopped' }));
+      return;
+    }
+    const identity = `${serial}:${pkg}:${captureRequest}`;
+    let id = streamId.current;
+    if (captureIdentity.current === identity) {
+      send({ type: 'stream.resume', streamId: id });
+    } else {
+      resetCapture();
+      setStream({ state: 'starting', running: false });
+      id = ++streamId.current;
+      send({ type: 'stream.start', serial, pkg, streamId: id, previous: disposition.current });
+      disposition.current = 'save';
+      captureIdentity.current = identity;
+    }
+    return () => send({ type: 'stream.pause', streamId: id });
+  }, [serial, pkg, online, send, stopped, captureRequest, resetCapture, gamesLoaded, captureEnabled]);
+
+  const newSession = useCallback((previous = 'save') => {
+    if (previous === 'save') send({ type: 'session.save', streamId: streamId.current });
+    else send({ type: 'session.discard', id: sessionId });
+    disposition.current = previous;
+    streamId.current++; // reject late batches from the capture being cleared
+    resetCapture();
+    setStopped(false);
+    setCaptureRequest((v) => v + 1);
+    setHistoryVersion((v) => v + 1);
+  }, [send, resetCapture, sessionId]);
+  const saveSession = useCallback(() => send({ type: 'session.save', streamId: streamId.current }), [send]);
+  const reviewSession = useCallback((id) => { setArchivedId(id); setArchiveReturn(inGameWorkspace ? 'game-sessions' : 'sessions'); setView('saved-session'); }, [inGameWorkspace]);
+
+  const selectGame = useCallback((packageId) => { setFollow(false); setPkg(packageId); }, []);
+  const openGame = useCallback((packageId) => { setFollow(false); setPkg(packageId); setView('game'); }, []);
+  const viewGameSessions = useCallback((packageId = '__all') => { setHistoryGame(packageId); setView(packageId === '__all' ? 'sessions' : 'game-sessions'); if (packageId !== '__all') setPkg(packageId); }, []);
+  const performGameAction = useCallback(async (packageId, action) => {
+    if (actionBusy || !serial || !online) return;
+    setActionBusy(`${packageId}:${action}`);
+    try {
+      if (action !== 'stop') {
+        const ready = new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { captureWaiter.current = null; reject(new Error('The new capture did not start. Try again when the phone is ready.')); }, 15000);
+          captureWaiter.current = { pkg: packageId, serial, resolve: (s) => { clearTimeout(timer); captureWaiter.current = null; resolve(s); } };
+        });
+        selectGame(packageId);
+        if (pkg === packageId) newSession('save');
+        else setStopped(false);
+        await ready;
+      }
+      await api(`devices/${encodeURIComponent(serial)}/apps/${encodeURIComponent(packageId)}/${action}`, { method: 'POST' });
+      if (action === 'stop' && pkg === packageId) setStopped(true);
+      refreshApps();
+    } catch (err) { showToast({ title: `Could not ${action} the game`, msg: err.message }); }
+    finally { setActionBusy(null); }
+  }, [actionBusy, serial, online, pkg, newSession, selectGame, refreshApps, showToast]);
 
   const value = useMemo(() => ({
     status, devices, pair, online, view, setView, serial, setSerial, selectDevice, pkg, setPkg, follow, setFollow, apps, refreshApps, send,
     device: devices.find((d) => d.serial === serial) ?? null,
+    game, inGameWorkspace, openGame, archiveReturn,
+    games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, setHistoryGame, viewGameSessions,
+    session, captureVersion, historyVersion, setHistoryVersion, newSession, saveSession, archivedId, reviewSession,
     lines, version, stream, rate, monitor, sessionId, toast, setToast, showToast, alerts, setAlerts, lastReport, setLastReport,
     focusEntry, setFocusEntry, stopped, setStopped, groups, perf, perfSummary, perfVersion,
     showInLogs: (entryId) => { setFocusEntry(entryId); setView('logs'); },
-  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion]);
+  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion, session, captureVersion, historyVersion, newSession, saveSession, archivedId, reviewSession, games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, viewGameSessions, game, inGameWorkspace, openGame, archiveReturn]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -9,7 +9,8 @@ const VIEWS = [
   ['performance', 'Performance', 'Frame times, CPU, memory and temperature.', '02'],
   ['health', 'Plugin health', 'SDK startup, ad state, revenue and checks.', '03'],
   ['firebase', 'Firebase events', 'Inspect this game’s events and parameters.', '04'],
-  ['checklist', 'Checklist', 'Run the checks for this game’s test session.', '05'],
+  ['remote-config', 'Remote Config', 'Inspect fetched settings and level sequences.', '05'],
+  ['checklist', 'Checklist', 'Run the checks for this game’s test session.', '06'],
 ];
 export function Game() {
   const { game, gameInventory, serial, device, devices, selectDevice, pkg, setView, performGameAction, actionBusy, refreshApps, stopped, setStopped, stream, reloadGames, viewGameSessions } = useApp();

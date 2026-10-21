@@ -31,7 +31,7 @@ function CheckList({ checks, empty }) {
 
 function LaunchTimeline({ launch }) {
   if (!launch) return null;
-  const steps = launch.steps.filter((x) => x.at != null);
+  const steps = launch.steps.filter((x) => x.at != null && x.id !== 'rc');
   const max = Math.max(1, ...steps.map((x) => x.at));
   return (
     <div style={{ marginBottom: 18 }}>
@@ -46,21 +46,6 @@ function LaunchTimeline({ launch }) {
       <div className="dim" style={{ fontSize: 13, marginTop: 8 }}>
         {launch.captured ? 'From tapping the icon (game process start). "Android" is the launch time Android itself reports.' : 'The launch happened before the log started, so times are from the first plugin line. Use Restart game in Logs to measure a full launch.'}
       </div>
-    </div>
-  );
-}
-
-function RcValue({ v }) {
-  const [open, setOpen] = useState(false);
-  const keys = v.json && typeof v.json === 'object' ? Object.keys(v.json).length : null;
-  return (
-    <div className="rcv">
-      <button className="rchead" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span style={{ fontWeight: 700 }}>{v.name}</span>
-        <span className="mono dim" style={{ fontSize: 12.5 }}>{keys != null ? `${keys} keys` : 'not valid JSON (cut off?)'}{v.from ? ` · from ${v.from}` : ''} · {clock(v.ts, false)}</span>
-        <span className="car" style={{ marginLeft: 'auto', color: 'var(--dim)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
-      </button>
-      {open && <pre className="trace" style={{ margin: '0 0 12px', maxHeight: 340, overflow: 'auto' }}>{v.json ? JSON.stringify(v.json, null, 2) : v.raw}</pre>}
     </div>
   );
 }
@@ -155,13 +140,12 @@ export function Health() {
     );
   }
 
-  const done = h.startup.filter((s) => s.status === 'done').length;
+  const startup = h.startup.filter((s) => s.id !== 'rc');
+  const done = startup.filter((s) => s.status === 'done').length;
   const sdk = Object.fromEntries(h.sdks.map((c) => [c.key, c]));
   const adapters = h.adapters.filter((a) => !onlyProblems || a.status !== 'InitializedSuccess');
   const okAdapters = h.adapters.filter((a) => a.status === 'InitializedSuccess').length;
   const mc = h.maxConfig;
-  const ac = h.rc.adConfig;
-  const on = (v) => (String(v).toLowerCase() === 'true' ? 'on' : 'off');
   const extra = monitor.sdkList;
   const startedLabel = h.appStart ? `launched ${clock(h.appStart, false)}` : '';
 
@@ -172,8 +156,8 @@ export function Health() {
     ...(monitor.privacy ?? []).filter((c) => c.status === 'problem').map((c) => ({ id: `pv:${c.id}`, severity: 'warning', name: c.name, detail: c.result })),
   ].sort((a, b) => (a.severity === 'critical' ? -1 : 0) - (b.severity === 'critical' ? -1 : 0));
   const shownIssues = allIssues ? issues : issues.slice(0, 3);
-  const readySdks = h.sdks.filter((c) => c.state === 'Initialized').length;
-  const seenSdks = h.sdks.filter((c) => c.state || (!c.notUsed && !c.noLogs && c.key !== 'SDK.Purchaser'));
+  const readySdks = h.sdks.filter((c) => c.state === 'Initialized' && c.key !== 'SDK.RemoteConfig').length;
+  const seenSdks = h.sdks.filter((c) => c.key !== 'SDK.RemoteConfig' && (c.state || (!c.notUsed && !c.noLogs && c.key !== 'SDK.Purchaser')));
   const ads = h.funnels.reduce((n, f) => n + (f.format === 'interstitial' || f.format === 'rewarded' ? f.shown : 0), 0);
   const healthy = !issues.length && !h.debugInRelease;
 
@@ -182,6 +166,7 @@ export function Health() {
       <PageHead title="Plugin health" sub={`AVN plugin · ${pkg} on ${deviceName(device)}${startedLabel ? ` · ${startedLabel}` : ''}`}>
         {h.debugLogs === 'off' && <span className="tag tag-warn">Plugin debug logs off</span>}
       </PageHead>
+
 
       {h.debugInRelease && (
         <div className="card" style={{ padding: '16px 20px', borderColor: '#6b2e27', background: '#2a1916', lineHeight: 1.6 }}>
@@ -196,7 +181,7 @@ export function Health() {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px 18px', flexWrap: 'wrap' }}>
           <span className="px" style={{ fontSize: 24, color: healthy ? 'var(--ok)' : 'var(--warn)' }}>{healthy ? 'All good' : `${issues.length} ${issues.length === 1 ? 'thing' : 'things'} to look at`}</span>
           <span className="summary-line">
-            <span><b>{done}/{h.startup.length}</b> startup steps</span>
+            <span><b>{done}/{startup.length}</b> startup steps</span>
             <span><b>{readySdks}</b> SDKs ready</span>
             <span><b>{ads}</b> ads shown</span>
             <span><b>${h.revenue.total.toFixed(4)}</b> revenue</span>
@@ -223,10 +208,10 @@ export function Health() {
       <section className="card rise" style={{ padding: '18px 22px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
           <span className="eyebrow">Startup</span>
-          <span className="mono" style={{ fontSize: 13 }}><span style={{ color: 'var(--ok)' }}>{done}</span><span className="dim"> of {h.startup.length} steps</span></span>
+          <span className="mono" style={{ fontSize: 13 }}><span style={{ color: 'var(--ok)' }}>{done}</span><span className="dim"> of {startup.length} steps</span></span>
         </div>
         <div className="tl" role="list" aria-label="Startup steps">
-          {h.startup.map((s) => (
+          {startup.map((s) => (
             <div key={s.id} className={`tstep ${s.status}`} role="listitem">
               <span className="tdot">{s.status === 'done' ? <Check size={13} /> : s.status === 'failed' || s.status === 'timeout' ? '!' : null}</span>
               <span className="tname">{STEP_NAMES[s.id] ?? s.id}</span>
@@ -234,7 +219,7 @@ export function Health() {
             </div>
           ))}
         </div>
-        {h.startup.find((s) => s.failed) && <div style={{ color: 'var(--bad)', fontSize: 13.5, marginTop: 12 }}>{h.startup.find((s) => s.failed).failed}</div>}
+        {startup.find((s) => s.failed) && <div style={{ color: 'var(--bad)', fontSize: 13.5, marginTop: 12 }}>{startup.find((s) => s.failed).failed}</div>}
       </section>
 
       <section className="rise">
@@ -245,7 +230,6 @@ export function Health() {
               'SDK.Firebase': h.firstEventVerified ? 'Probe handed to SDK' : null,
               'SDK.AdsProvider': [mc?.country, h.adapterSummary && `${h.adapterSummary.ok} of ${h.adapterSummary.total} adapters`].filter(Boolean).join(' · ') || null,
               'SDK.AdMob': 'Used for App Open',
-              'SDK.RemoteConfig': h.rc.fetch ? `last fetch: ${h.rc.fetch.lastFetchStatus}` : null,
             }[c.key] ?? null} />
           ))}
         </div>
@@ -290,7 +274,7 @@ export function Health() {
         <CheckCard title="Consent & privacy" checks={monitor.privacy} empty="Waiting for consent lines." />
       </div>
 
-      <Disclosure id="health.advanced" title="Advanced" hint={`Launch timing · other SDKs${extra?.extra?.length ? ` (${extra.extra.length})` : ''} · MAX adapters${h.adapters.length ? ` (${okAdapters}/${h.adapters.length})` : ''} · remote config values`}>
+      <Disclosure id="health.advanced" title="Advanced" hint={`Launch timing · other SDKs${extra?.extra?.length ? ` (${extra.extra.length})` : ''} · MAX adapters${h.adapters.length ? ` (${okAdapters}/${h.adapters.length})` : ''}`}>
         <section className="card" style={{ padding: '18px 22px' }}>
           <div className="eyebrow" style={{ marginBottom: 12 }}>Launch timing</div>
           <LaunchTimeline launch={h.launch} />
@@ -340,31 +324,6 @@ export function Health() {
             <div className="dim" style={{ fontSize: 12.5, padding: '10px 0 8px', borderTop: '1px solid var(--line-soft)' }}>Not started is fine if that network isn't on any of your ad units.</div>
           </section>
 
-          <section className="card" style={{ flex: '1 1 340px', minWidth: 0, padding: '18px 22px 14px' }}>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Remote config</div>
-            {!h.rc.sources && !ac && <div className="dim" style={{ padding: '10px 0', fontSize: 14 }}>No remote config lines yet.</div>}
-            {h.rc.sources && Object.entries(h.rc.sources).map(([k, v]) => (
-              <div key={k} className="kv"><span className="mute">{k}</span><span className={`tag ${v === 'Remote' ? 'tag-ok' : 'tag-warn'}`}>{v === 'Remote' ? 'From server' : v}</span></div>
-            ))}
-            {h.rc.customKeys.map((k) => (
-              <div key={k.key} className="kv"><span className="mute">{k.key}</span><span className={`tag ${k.source === 'Remote' ? 'tag-ok' : 'tag-warn'}`}>{k.source === 'Remote' ? 'From server' : k.source}</span></div>
-            ))}
-            {ac && (
-              <>
-                <div className="eyebrow" style={{ margin: '18px 0 6px' }}>Applied AdConfig</div>
-                <div className="kv"><span className="mute">Interstitial from level</span><span className="mono">{ac.EnableInterFromLevel ?? '—'}</span></div>
-                <div className="kv"><span className="mute">Delay between interstitials</span><span className="mono">{ac.InterAdDelay ? `${ac.InterAdDelay} s` : '—'}</span></div>
-                <div className="kv"><span className="mute">Delay before first ad</span><span className="mono">{ac.DelayBeforeFirstAd ? `${ac.DelayBeforeFirstAd} s` : '—'}</span></div>
-                <div className="kv"><span className="mute">Inter / Rewarded / Banner / App open</span><span className="mono">{[ac.Inter, ac.Rewarded, ac.Banner, ac.AppOpen].map(on).join(' / ')}</span></div>
-              </>
-            )}
-            {h.rc.values?.length > 0 && (
-              <>
-                <div className="eyebrow" style={{ margin: '18px 0 6px' }}>Values the game logged</div>
-                {h.rc.values.map((v) => <RcValue key={v.name} v={v} />)}
-              </>
-            )}
-          </section>
         </div>
       </Disclosure>
     </main>

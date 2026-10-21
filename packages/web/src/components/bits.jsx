@@ -63,6 +63,7 @@ const GAME_NAV = [
   { id: 'performance', title: 'Performance', short: 'Perf', icon: 'pulse', sub: (st) => st.performance },
   { id: 'health', title: 'Plugin health', short: 'Health', icon: 'shield', sub: (st) => st.health },
   { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', sub: (st) => st.firebase, also: ['firebase-setup'] },
+  { id: 'remote-config', title: 'Remote Config', short: 'Config', icon: 'clipboard', sub: () => ({ text: 'Fetched values' }) },
   { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
   { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
 ];

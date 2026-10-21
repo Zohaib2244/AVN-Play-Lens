@@ -3,6 +3,7 @@
 // adapters, ad funnels, remote config, revenue and the pack's watch rules.
 import { matches, durationMs, template, valueTest } from '../rules/match.mjs';
 import { sdkFromTag } from '../logcat/owner.mjs';
+import { ingestRemoteValue, remoteVariables } from './remote-config.mjs';
 
 const AD_FORMATS = [
   { id: 'interstitial', pattern: /^Ad\.Interstitial\.(\d+)$/, label: (m) => `Interstitial · slot ${m[1]}` },
@@ -233,16 +234,7 @@ export class Health {
   // RemoteConfig.Values lines that carry JSON: "AdConfig updated from fetch : {...}",
   // "Custom key=GameSettings value loaded from cache: {...}", "Applied cached AdConfig: {...}".
   ingestRcValue(message, e) {
-    const text = [message.replace(/\s*\|\s*AVNPLUGIN\s*$/, ''), ...(e.more ?? [])].join('\n');
-    const at = text.search(/[{[]/);
-    if (at < 0) return;
-    const head = text.slice(0, at);
-    const name = /Custom key=(\w+)/.exec(head)?.[1] ?? /\b(\w*(?:Config|Settings|Ids)\w*)\b/.exec(head)?.[1] ?? 'Value';
-    const raw = text.slice(at).replace(/\s*\|\s*AVNPLUGIN\s*$/gm, '').trim();
-    let json = null;
-    try { json = JSON.parse(raw); } catch { /* truncated or not JSON */ }
-    const from = /fetch/i.test(head) ? 'fetch' : /cache/i.test(head) ? 'cache' : /default/i.test(head) ? 'default' : null;
-    this.rcValues[name] = { name, json, raw: json ? null : raw.slice(0, 4000), truncated: !json, from, ts: e.ts };
+    ingestRemoteValue(this.rcValues, message, e);
   }
 
   ingestConsent(message, e) {
@@ -350,7 +342,7 @@ export class Health {
       adapters,
       adapterSummary: this.adapterSummary,
       funnels: Object.values(this.funnels).sort((x, y) => x.key.localeCompare(y.key)),
-      rc: { ...this.rc, values: Object.values(this.rcValues) },
+      rc: { ...this.rc, values: Object.values(this.rcValues), variables: remoteVariables({ ...this.rc, values: Object.values(this.rcValues) }) },
       launch: this.launchTimeline(),
       levels: { source: this.levelSource, current: this.levels.at(-1)?.level ?? null, count: new Set(this.levels.map((l) => l.level)).size },
       revenue: this.revenue,

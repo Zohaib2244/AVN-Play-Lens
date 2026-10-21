@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
+import { displayRemoteValue } from './remote-config.mjs';
 
 export const REPORTS_DIR = join(os.homedir(), '.avn-playlens', 'reports');
 const ICON = { ok: 'PASS', problem: 'CHECK', pending: 'MISSING' };
@@ -13,6 +14,9 @@ const mins = (ms) => `${Math.max(1, Math.round(ms / 60000))} min`;
 export function buildReport({ id, run, items, flags, crashes, health, device, pkg }) {
   const passed = items.filter((i) => i.status === 'ok').length;
   const title = `${pkg || 'Game'} test run: ${passed} of ${items.length} passed`;
+  const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
+  const variables = health?.rc?.variables ?? [];
+  const rcMd = ['## Firebase Remote Config', '', 'Values and types observed in plugin logs; unlogged keys and truncated values cannot be fully verified.', '', '| Variable / field | Value | Data type | Registered type | Source | Time |', '|---|---|---|---|---|---|', ...variables.map((v) => `| ${cell(v.name)} | ${cell(displayRemoteValue(v))}${v.truncated ? ' [TRUNCATED]' : ''} | ${cell(v.type || 'unknown')} | ${cell(v.declaredType)} | ${cell(v.source)} (${cell(v.from)}) | ${cell(when(v.ts))} |`), ''];
   const md = [
     `# ${title}`,
     '',
@@ -23,6 +27,7 @@ export function buildReport({ id, run, items, flags, crashes, health, device, pk
     `- Crashes and ANRs: ${crashes.length}`,
     health?.revenue?.total ? `- Ad revenue seen: $${health.revenue.total.toFixed(4)}` : null,
     '',
+    ...rcMd,
     '## Checklist',
     '',
     '| Result | Check | Notes |',
@@ -39,11 +44,13 @@ export function buildReport({ id, run, items, flags, crashes, health, device, pk
   ].filter((l) => l !== null).join('\n');
 
   const row = (i) => `<tr class="${i.status}"><td>${ICON[i.status]}</td><td>${esc(i.name)}</td><td>${esc(i.note)}</td></tr>`;
+  const rcHtml = `<h2>Firebase Remote Config</h2><p class="meta">Values and types observed in plugin logs. Unlogged keys and truncated values cannot be fully verified.</p>${variables.length ? `<table><tr><th>Variable / field</th><th>Value</th><th>Data type</th><th>Source</th></tr>${variables.map((v) => `<tr><td>${esc(v.name)}</td><td>${esc(displayRemoteValue(v))}${v.truncated ? '<br>TRUNCATED' : ''}</td><td>${esc(v.type || 'unknown')}${v.declaredType ? `<br>Registered: ${esc(v.declaredType)}` : ''}</td><td>${esc(v.source)} · ${esc(v.from)}<br>${esc(when(v.ts))}</td></tr>`).join('')}</table>` : '<p class="meta">No values logged in this run.</p>'}`;
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
 <style>body{margin:0;background:#16120F;color:#F1E7D6;font:15px/1.55 system-ui,sans-serif}main{max-width:900px;margin:0 auto;padding:40px 20px}h1{font-size:28px;margin:0 0 12px}h2{margin:32px 0 10px;font-size:18px}
 .meta{color:#BDAE98}table{width:100%;border-collapse:collapse;background:#201A16;border-radius:12px;overflow:hidden}td,th{padding:10px 12px;border-top:1px solid #3A2F27;text-align:left;vertical-align:top}
 th{color:#9A8B76;font-size:12px;letter-spacing:.12em;text-transform:uppercase;border-top:0}tr.ok td:first-child{color:#9ED9C9}tr.problem td:first-child{color:#EBC86A}tr.pending td:first-child{color:#F28B82}td:first-child{font-family:monospace;white-space:nowrap}</style></head>
 <body><main><h1>${esc(title)}</h1><p class="meta">${esc(pkg)} · ${esc(device)} · ${esc(when(run.startedAt))} · ${esc(mins((run.finishedAt ?? Date.now()) - run.startedAt))} · rules: ${esc(run.profileFile)}</p>
+${rcHtml}
 <h2>Checklist</h2><table><tr><th>Result</th><th>Check</th><th>Notes</th></tr>${items.map(row).join('')}</table>
 <h2>Rule hits</h2>${flags.length ? `<table><tr><th>Severity</th><th>Rule</th><th>Count</th></tr>${flags.map((f) => `<tr><td>${esc(f.severity)}</td><td>${esc(f.name)}</td><td>${f.count}</td></tr>`).join('')}</table>` : '<p class="meta">None.</p>'}
 <h2>Crashes and ANRs</h2>${crashes.length ? `<ul>${crashes.map((c) => `<li>${esc(when(c.ts))} · ${esc(c.kind)}: ${esc(String(c.message).slice(0, 200))}</li>`).join('')}</ul>` : '<p class="meta">None.</p>'}

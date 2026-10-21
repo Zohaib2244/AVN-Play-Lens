@@ -6,7 +6,7 @@ import { api, connectSocket } from './api.js';
 
 const AppContext = createContext(null);
 const MAX_LINES = 50000;
-const GAME_VIEWS = new Set(['game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'checklist', 'checklist-setup', 'game-sessions']);
+const GAME_VIEWS = new Set(['game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'remote-config', 'checklist', 'checklist-setup', 'game-sessions']);
 const ALERT_KINDS = { exception: 'Unity exception', 'java-crash': 'App crashed (Java)', 'native-crash': 'App crashed (native)', anr: 'App not responding (ANR)' };
 
 export function AppProvider({ children }) {

@@ -331,6 +331,20 @@ button, input, select { font: inherit; color: inherit; }
 .ropt[aria-pressed="true"] .radio i { transform: scale(1); }
 
 /* Firebase + checklist */
+.table-scroll { overflow-x: auto; }
+.report-heading .input { background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 40px; }
+.report-heading .input:focus { outline: 2px solid var(--warm); outline-offset: 2px; }
+.verification-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.verification-table th { color: var(--dim); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; background: var(--well); }
+.verification-table td, .verification-table th { padding: 14px 20px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.verification-table td { overflow-wrap: anywhere; min-width: 130px; max-width: 420px; }
+.verification-table td .dim { font-size: 12px; margin-top: 6px; }
+.report-heading { padding: 20px 22px 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.report-heading h2, .build-upload h2 { font-size: 19px; margin: 0; }
+.report-heading p { margin: 7px 0; font-size: 13px; }
+.report-heading input { max-width: 250px; }
+.rc-value pre { white-space: pre-wrap; max-height: 300px; overflow: auto; }
+.rc-value { white-space: pre-wrap; }
 .sdk-FA { background: var(--warn-soft); color: var(--warn); }
 .sdk-BB { background: var(--lavender-soft); color: var(--lavender); }
 .erow { display: grid; grid-template-columns: 96px 44px minmax(140px, 210px) minmax(0, 1fr) 160px 20px; align-items: center; gap: 14px; width: 100%; min-height: 50px; padding: 0 20px; border: 0; border-top: 1px solid var(--line-soft); background: transparent; text-align: left; cursor: pointer; transition: background .15s; }

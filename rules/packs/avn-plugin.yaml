@@ -1,0 +1,242 @@
+# AVN plugin pack: shared checks for every game that ships the AVN plugin.
+# Source: AVN_PLUGIN_LOG_REFERENCE.md (reviewed 2026-10-20). Ads: AppLovin MAX; App Open: AdMob.
+#
+# Scope: only lines the generic plugin writes (suffix "| AVNPLUGIN", tag Unity).
+# Game-specific scripts (User Setup/*, GameAnalyticsEvents, game folders) are NOT
+# checked here; put those in the game's own profile file.
+#
+# Matchers work on parsed entries (packages/server/src/avn/parse.mjs):
+#   kind: status | counter | callback | adapter | adapters | max-config | banner |
+#         send | rc-sources | ad-config | ad-ids | plain
+#   plus the fields of that kind (key, state, name, callback, format, fields.*, event.*).
+#   Strings are exact, /slashes/ are regex, "!text" means anything but that.
+
+pack: avn-plugin
+name: AVN plugin
+logger:
+  tag: Unity
+  suffix: "| AVNPLUGIN"
+  stripColorTags: true            # Editor captures wrap lines in <color=cyan>
+
+# Settings each game profile can override.
+options:
+  byteBrew: false                 # USE_BYTEBREW; off in Zombie Rush, so ByteBrew checks are skipped
+  expectedAdapters: [BidMachine, BIGO, Pangle, Meta, DT Exchange, Google AdMob, Google Ad Manager,
+                     InMobi, Mintegral, Moloco, Unity Ads, Liftoff, Yandex, ironSource]
+  appOpenFromLevel: null          # if set, "TryShow blocked: app-open enabled from level" is expected, not a fault
+
+# ── Build checks ────────────────────────────────────────────────────────────
+build:
+  - id: debug-symbol-off
+    name: Plugin debug logging is off (USE_AVNADS_PLUGIN_DEBUG)
+    when: no info-level plugin lines within 15s of app start, but Unity lines are present
+    severity: warning
+    note: Only warnings and errors are visible. Most checks below can't run.
+  - id: debug-symbol-in-release
+    name: Plugin debug logging is on in a release build
+    when: plugin info lines present AND the installed package is not debuggable (dumpsys package flags)
+    severity: critical
+    note: Remove USE_AVNADS_PLUGIN_DEBUG from release builds.
+
+# ── Startup sequence (section 2) ─────────────────────────────────────────────
+sequence:
+  - id: startup
+    name: Healthy launch
+    resetOn: app-start
+    steps:
+      - { id: awake,     match: { kind: status, key: SDK.Firebase, state: Idle } }
+      - { id: start,     match: { kind: plain, caller.class: AVNPlugin, caller.method: Start } }
+      - { id: accepted,  match: { kind: status, key: SDK.Init, state: Info } }
+      - { id: max,       match: { kind: status, key: SDK.AdsProvider, state: Initialized }, within: 20s, parallel: true }
+      - { id: firebase,  match: { kind: status, key: SDK.Firebase, state: Initialized }, within: 20s, parallel: true }
+      - { id: admob,     match: { kind: status, key: SDK.AdMob, state: Initialized }, parallel: true }
+      - { id: rc,        match: { kind: status, key: SDK.RemoteConfig, state: Initialized }, parallel: true }
+      - { id: done,      match: { kind: status, key: SDK.InitCompleted, state: Info } }
+      - { id: autoload,  match: { kind: plain, message: /^Auto-load starting:/ }, within: 10s }
+    failOn:
+      - { match: { kind: status, key: /^SDK\./, state: Failed }, label: "SDK failed: {key}: {message}" }
+
+# ── Watch rules (flag lines) ─────────────────────────────────────────────────
+watch:
+  # Critical
+  - id: firebase-failed
+    name: Firebase failed to start
+    match: { kind: status, key: SDK.Firebase, state: Failed }
+    severity: critical
+  - id: ads-provider-failed
+    name: AppLovin MAX failed to start
+    match: { kind: status, key: SDK.AdsProvider, state: Failed }
+    severity: critical
+  - id: event-dropped
+    name: Analytics event dropped, Firebase not initialized
+    match: { kind: status, key: Analytics.Event, event.stage: dropped }
+    severity: critical
+    capture: { event: "{event.name}" }
+  - id: config-error
+    name: Plugin setup error
+    match: { kind: plain, level: E, message: /reference is missing|Multiple instances of Singleton|Failed to parse (AdConfig|TaichiThresholds)/ }
+    severity: critical
+  - id: ad-stuck-showing
+    name: Ad stuck showing, SDK dropped the close callback
+    match: { kind: status, key: /^Ad\./, message: "/^Watchdog: .*stuck/" }
+    severity: critical
+
+  # Warnings
+  - id: event-before-init
+    name: Event sent before Firebase was ready (may be lost)
+    match: { kind: status, key: Analytics.Event, event.stage: before-init }
+    severity: warning
+  - id: ad-load-failed
+    name: Ad failed to load
+    match: { kind: callback, callback: LoadFailed }
+    severity: warning
+    capture: { format: "{format}", unit: "{fields.unit}", code: "{fields.code}", network: "{fields.networkMsg}" }
+  - id: ad-display-failed
+    name: Ad failed to display
+    match: { kind: callback, callback: DisplayFailed }
+    severity: warning
+  - id: retries-exhausted
+    name: Ad retries ran out
+    match: { kind: status, message: /retries exhausted|retry limit reached/ }
+    severity: warning
+  - id: adapter-failed
+    name: MAX adapter failed to start
+    match: { kind: adapter, fields.status: InitializedFailure }
+    severity: warning
+    capture: { network: "{fields.name}" }
+  - id: no-ad-available
+    name: No ad ready when the game asked
+    match: { kind: status, key: Analytics.Event, event.name: /^ad_no_(interstitial|interstitial_reward|reward|app_open)$/ }
+    severity: warning
+  - id: callback-missed
+    match: { kind: status, key: Analytics.Event, event.name: ADCallback_Missed }
+    severity: warning
+  - id: max-test-mode
+    name: MAX is in test mode
+    match: { kind: max-config, fields.testMode: /^true$/i }
+    severity: warning
+  - id: rc-not-from-server
+    name: Remote config value not from the server
+    match: { any: [ { kind: rc-sources, sources.AdConfig: "!Remote" }, { kind: rc-sources, sources.AdIdsConfig: "!Remote" } ] }
+    severity: warning
+  - id: purchase-failed
+    name: Purchase failed
+    match: { kind: status, key: SDK.Purchaser, state: Failed, message: /^Purchase failed/ }
+    severity: warning
+
+  # Info (shown in Flags, no alert)
+  - id: revenue
+    name: Ad revenue
+    match: { any: [ { kind: callback, callback: RevenuePaid }, { kind: banner, what: revenue-paid } ] }
+    severity: info
+    capture: { format: "{format}", network: "{fields.network}", revenue: "{fields.revenue}" }
+
+# ── Ad flows (section 5): end-to-end chains, per format ──────────────────────
+flows:
+  - id: interstitial
+    keyPattern: /^Ad\.Interstitial\.(\d+)$/      # per slot
+    load:    [ { kind: counter, name: LoadCallsSent }, { kind: callback, format: interstitial, callback: Loaded } ]
+    show:    [ { kind: counter, name: ShowCallsSent }, { kind: callback, format: interstitial, callback: Displayed }, { kind: callback, format: interstitial, callback: Closed } ]
+    impression: { kind: callback, format: interstitial, callback: RevenuePaid }   # the only proof of an impression
+    stuckAfter: 60s
+  - id: rewarded
+    key: Ad.Rewarded
+    load:    [ { kind: counter, name: LoadCallsSent }, { kind: callback, format: rewarded, callback: Loaded } ]
+    show:    [ { kind: counter, name: ShowCallsSent }, { kind: callback, format: rewarded, callback: Displayed }, { kind: callback, format: rewarded, callback: Closed } ]
+    outcome: { granted: { kind: status, message: "Reward granted on close" }, cancelled: { kind: status, message: "Reward cancelled by user" } }
+    impression: { kind: callback, format: rewarded, callback: RevenuePaid }
+  - id: app-open
+    key: Ad.AppOpen
+    load:    [ { kind: counter, name: LoadCallsSent }, { kind: counter, name: AdsLoaded } ]
+    show:    [ { kind: counter, name: ShowCallsSent }, { kind: counter, name: AdsDisplayed }, { kind: status, state: Closed } ]
+    impression: { kind: plain, message: /^AdMob AppOpen paid event/ }
+    expectedBlocks: [ "TryShow blocked: app-open enabled from level" ]   # level gate, not a failure
+  - id: banner
+    key: /^Ad\.Banner\.(Standard|Mrec)$/
+    load:    [ { kind: counter, name: LoadCallsSent }, { kind: banner, what: loaded } ]
+    show:    [ { kind: counter, name: ShowCallsSent }, { kind: counter, name: AdsDisplayed } ]   # "displayed" = show call made, not visible
+    impression: { kind: banner, what: revenue-paid }                                             # repeats on refresh
+
+# ── Event checks (section 10) ────────────────────────────────────────────────
+events:
+  limits: { nameMax: 40, stringParamMax: 100, paramsMax: 25 }    # Firebase limits, checked on every event
+  source: firebase-debug       # events view = FA / FA-SVC lines (fa.mjs); needs Firebase debug setup + game restart
+  crossCheck:                  # plugin lines are a second opinion (crosscheck.mjs)
+    windowMs: 5000
+    notLogged:    { severity: warning, label: "Plugin sent {name}, Firebase didn't log it" }
+    firebaseOnly: { severity: info, label: "Logged by Firebase, not sent through the plugin" }   # game code calling Firebase directly
+    ignoreAuto: true           # session_start, screen_view, user_engagement… never go through the plugin
+  catalogue:                                                     # expected parameters for plugin events
+    ad_interstitial:          { params: [COUNT, SLOT] }
+    ad_interstitial_rewarded: { params: [] }
+    ad_rewarded:              { params: [] }
+    ad_app_open:              { params: [] }
+    ad_banner:                { params: [] }
+    ad_adaptive_banner:       { params: [] }
+    ad_mrec:                  { params: [] }
+    ad_no_interstitial:       { params: [SLOT, ERROR] }
+    ad_no_interstitial_reward: { params: [] }                    # no ERROR param by design (known gap)
+    ad_no_reward:             { params: [] }                     # no ERROR param by design (known gap)
+    ad_no_app_open:           { params: [ERROR] }
+    ad_impression:            { oneOf: [ [ad_platform, ad_source, ad_unit_name, ad_format, value, currency], [value, currency, precision, network] ] }  # MAX | AdMob
+    c_ad_impression_10:       { params: [value, currency] }
+    c_ad_impression_5:        { params: [value, currency] }
+    ECPM_ANALYSIS:            { params: [PLAYER_ID, ECPM, INTER_COUNT] }
+    USER_RETURN_STATUS:       { oneOf: [ [SERVED_AD], [RETURNED_FROM_AD] ] }
+    INTER_SHOW_MODE:          { params: [MODE] }
+    ADCallback_Missed:        { params: [SLOT, AD_TYPE] }
+    in_app_purchase:          { params: [product_id, price, currency, quantity] }
+    purchase_restored:        { params: [product_id] }
+    purchase_refunded:        { params: [product_id] }
+    avn_qa_probe:             { params: [source], debugOnly: true }
+  consistency:
+    - id: revenue-has-impression
+      name: Every ad revenue callback is followed by ad_impression
+      after: { any: [ { kind: callback, callback: RevenuePaid }, { kind: banner, what: revenue-paid } ] }
+      expect: { kind: status, key: Analytics.Event, event.name: ad_impression }
+      within: 5s
+    - id: first-event-verified
+      name: First Firebase event confirmed after init
+      expect: { kind: status, key: SDK.Firebase.EventVerified, state: Sent }
+      within: 60s of SDK.Firebase Initialized
+
+# ── Checklist presets (one click in the Checklist setup) ─────────────────────
+presets:
+  - id: startup-health
+    name: Startup health
+    uses: [sequence.startup, events.consistency.first-event-verified]
+  - id: remote-config
+    name: Remote config came from the server
+    expect:
+      - { kind: status, key: SDK.RemoteConfig, fetch.lastFetchStatus: Success }
+      - { kind: rc-sources, sources.AdConfig: Remote, sources.AdIdsConfig: Remote }
+      - { kind: ad-config }
+  - id: interstitial-e2e
+    name: Interstitial end to end
+    uses: [flows.interstitial]
+    expectEvents: [ad_interstitial, ad_impression, USER_RETURN_STATUS]
+  - id: rewarded-e2e
+    name: Rewarded end to end, reward granted
+    uses: [flows.rewarded]
+    expectOutcome: granted
+    expectEvents: [ad_rewarded, ad_impression]
+  - id: app-open
+    name: App open shows after resume
+    uses: [flows.app-open]
+    expectEvents: [ad_app_open, ad_impression]
+  - id: banner
+    name: Banner loads and earns
+    uses: [flows.banner]
+    expectEvents: [ad_banner, ad_impression]
+  - id: purchase
+    name: In-app purchase confirmed
+    expect:
+      - { kind: status, key: SDK.Purchaser, message: /^Purchase confirmed:/ }
+      - { kind: status, key: Analytics.Event, event.name: in_app_purchase }
+      - { kind: plain, message: /^AppsFlyer af_purchase sent:/ }
+
+# ── Known gaps: shown as "can't be verified from logs" ───────────────────────
+gaps:
+  - AppsFlyer init and delivery (no callback; turn on isDebug and look at AppsFlyer_* tags)
+  - Firebase delivery to the server (FA lines are the furthest the device can show)
+  - ByteBrew in games without USE_BYTEBREW

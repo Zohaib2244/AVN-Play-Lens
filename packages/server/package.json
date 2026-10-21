@@ -1,0 +1,13 @@
+{
+  "name": "@avn-playlens/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "avn-playlens": "bin/avn-playlens.mjs"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "ws": "^8.18.0"
+  }
+}

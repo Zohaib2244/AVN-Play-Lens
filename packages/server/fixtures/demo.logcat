@@ -1,0 +1,97 @@
+--------- beginning of main
+1729420800.000  1520  1544 I ActivityManager: Start proc 18342:com.avn.demo/u0a211 for top-activity {com.avn.demo/com.unity3d.player.UnityPlayerActivity}
+1729420800.300 18342 18342 I Unity: SystemInfo CPU = ARM64 FP ASIMD AES, Cores = 8, Memory = 7654mb
+1729420800.410 18342 18342 I Unity   : Status SDK.Firebase => Idle: Waiting for initialization | AVNPLUGIN
+1729420800.411 18342 18342 I Unity   : Status SDK.RemoteConfig => Idle: Waiting for initialization | AVNPLUGIN
+1729420800.412 18342 18342 I Unity   : Status SDK.AdsProvider => Idle: Waiting for initialization | AVNPLUGIN
+1729420800.412  1520  1560 I ActivityTaskManager: Displayed com.avn.demo/com.unity3d.player.UnityPlayerActivity for user 0: +412ms
+1729420800.413 18342 18342 I Unity   : Status SDK.AdMob => Idle: Waiting for initialization | AVNPLUGIN
+1729420800.520 18342 18342 I Unity   : [AVNPlugin.Start] Start invoked; applying runtime IDs | AVNPLUGIN
+1729420800.540 18342 18342 I Unity   : Status RemoteConfig.Values => Loading: Applying cached AdConfig | AVNPLUGIN
+1729420800.610 18342 18342 I Unity   : [AVNPlugin.InitializeServiceDependencies] Initialize accepted: starting initialization sequence | AVNPLUGIN
+1729420800.611 18342 18342 I Unity   : Status SDK.Init => Info: AdsManager initialization sequence started | AVNPLUGIN
+1729420800.620 18342 18342 I Unity: [GoogleAppTracking.Start] GoogleAppTracking: Gathering consent. | AVNPLUGIN
+1729420800.700 18342 18342 I Unity   : Status SDK.AdsProvider => Initializing: Starting SDK | AVNPLUGIN
+1729420800.702 18342 18342 I Unity   : Status SDK.Firebase => Initializing: Initializing Firebase | AVNPLUGIN
+1729420800.900 18342 18342 I Unity   : Checking Dependencies | AVNPLUGIN
+1729420801.050 18342 18342 I Unity   : Level 1 loaded (seed 4021)
+1729420801.840 18342 18342 I Unity   : =================> Firebase Initialized Successfully =================> | AVNPLUGIN
+1729420801.841 18342 18342 I Unity   : Status SDK.Firebase => Initialized: Firebase initialized successfully | AVNPLUGIN
+1729420801.845 18342 18342 I Unity: [FirebaseService.PostInit] Firebase post-init: userId=3f9a, crashlyticsCollection=True, consent=Granted (AdUserData, AnalyticsStorage, AdPersonalization, AdStorage; set unconditionally) | AVNPLUGIN
+1729420801.900 18342 18342 I Unity   : Status SDK.Firebase.EventVerified => Sent: QA probe event avn_qa_probe handed to Firebase SDK | AVNPLUGIN
+1729420801.950 18342 18375 V FA      : Logging event (FE): avn_qa_probe, Bundle[{firebase_event_origin(_o)=app, source=init}]
+1729420801.960 18342 18375 V FA      : Logging event (FE): session_start(_s), Bundle[{ga_event_origin(_o)=auto, ga_session_number(_sno)=7}]
+1729420802.100 18342 18342 I Unity: [GoogleAppTracking.OnConsentInfoUpdated] GoogleAppTracking: Consent updated. Status=Obtained | AVNPLUGIN
+1729420802.110 18342 18342 I Unity: [GoogleAppTracking.ContinueStartup] GoogleAppTracking: Post-consent startup flow continuing. consentGranted=True | AVNPLUGIN
+1729420802.300 18342 18342 I Unity   : Status SDK.RemoteConfig => Initializing: Fetching remote config | AVNPLUGIN
+1729420803.300  1520  1560 I ActivityTaskManager: Fully drawn com.avn.demo/com.unity3d.player.UnityPlayerActivity: +3s300ms
+1729420803.400 18342 18342 I Unity   : -------- MAX SDK Initialization Complete -------- | AVNPLUGIN
+1729420803.401 18342 18342 I Unity   : MAX init config | success=True country=US testMode=False att=Authorized consentGeo=Other consentState=Unknown | AVNPLUGIN
+1729420803.402 18342 18342 I Unity   : MAX adapter | name=Google AdMob adapterVersion=24.1.0.0 sdkVersion=24.1.0 status=InitializedSuccess | AVNPLUGIN
+1729420803.403 18342 18342 I Unity   : MAX adapter | name=Meta adapterVersion=6.18.0.0 sdkVersion=6.18.0 status=InitializedSuccess | AVNPLUGIN
+1729420803.404 18342 18342 I Unity   : MAX adapter | name=Moloco adapterVersion=3.5.0.0 sdkVersion=3.5.0 status=InitializedFailure | AVNPLUGIN
+1729420803.405 18342 18342 I Unity   : MAX adapter | name=Yandex adapterVersion=7.6.0.0 sdkVersion=7.6.0 status=NotInitialized | AVNPLUGIN
+1729420803.406 18342 18400 E AppLovinSdk: [AppLovinSdk] Unknown ad format: REWARDED_INTER
+1729420803.410 18342 18342 I Unity   : MAX adapters: 2/4 initialized; not ready: Moloco=InitializedFailure, Yandex=NotInitialized | AVNPLUGIN
+1729420803.411 18342 18342 I Unity   : Status SDK.AdsProvider => Initialized: Ads provider SDK initialized | AVNPLUGIN
+1729420803.500 18342 18401 W FirebaseRemoteConfig: No value of type 'FirebaseRemoteConfigValue' exists for parameter key 'CMPEligibleUser'.
+1729420803.690 18342 18342 I Unity: Status RemoteConfig.Values => Loaded: AdConfig updated from fetch : {"EnableInterFromLevel":1,"InterAdDelay":30,"DelayBeforeFirstAd":10,"InterstitialShowMode":"ShowDefault","Banner":true,"Inter":true,"Rewarded":true,"AppOpen":false} | AVNPLUGIN
+1729420803.695 18342 18342 I Unity: Status RemoteConfig.Values => Loaded: Custom key=GameSettings value loaded from cache: {"LevelsPerTheme":1,"DailyBoostBonusSeconds":300,"DailyBoostBonusEnabled":true,"ShopMenuLevel":20,"AdBreakShowAfterLevel":20} | AVNPLUGIN
+1729420803.700 18342 18342 I Unity   : Status SDK.RemoteConfig => Initialized: FetchRemoteConfig success: config fetched and activated (lastFetchStatus=Success, fetchTime=2026-10-20T21:40:03Z) | AVNPLUGIN
+1729420803.701 18342 18342 I Unity   : Remote config value sources | AdConfig=Remote, AdIdsConfig=Default, CMPEligibleUser=Remote | AVNPLUGIN
+1729420803.702 18342 18342 I Unity   : AdConfig applied | EnableInterFromLevel=1 InterAdDelay=30 DelayBeforeFirstAd=10 InterstitialShowMode=ShowDefault RateUs=True Notification=True Banner=True Inter=True Rewarded=True AppOpen=False (RemoveAdsPurchased=False) ANRFixer=True WatchdogInter=True WatchdogRewarded=True | AVNPLUGIN
+1729420804.000 18342 18342 I Unity   : Status SDK.AdMob => Initialized: AdMob SDK initialized | AVNPLUGIN
+1729420804.200 18342 18342 I Unity   : Status SDK.InitCompleted => Info: Plugin init completed; starting ad auto-load | AVNPLUGIN
+1729420805.100 18342 18342 D Unity   : Touch began (412, 903)
+1729420805.500 18342 18350 I com.avn.demo: Background concurrent copying GC freed 2603KB AllocSpace bytes, 62(2920KB) LOS objects, 49% free, 13MB/27MB, paused 1.269ms,340us total 182.705ms
+1729420806.000 18342 18460 W ServiceBindIntentUtils: Dynamic lookup for intent failed for action: com.google.android.gms.ads.service.START
+1729420806.300 18342 18342 I Unity   : Status Analytics.Event => Sent: Custom event sent: Event=level_start, Params=2 [level=1, mode=classic] | AVNPLUGIN
+1729420806.320 18342 18375 V FA      : Logging event (FE): level_start, Bundle[{firebase_event_origin(_o)=app, level=1, mode=classic}]
+1729420807.200 18342 18342 I Unity   : [AVNPlugin.LoadAdsCoroutine] Auto-load starting: inter=True, rewarded=True, appOpen=False, mrec=False, banner=True | AVNPLUGIN
+1729420807.210 18342 18342 I Unity   : Counter Ad.Interstitial.0 LoadCallsSent=1
+1729420807.220 18342 18342 I Unity   : Status Ad.Interstitial.0 => Loading: Loading interstitial slot 0 | AVNPLUGIN
+1729420807.230 18342 18342 I Unity   : Counter Ad.Rewarded LoadCallsSent=1
+1729420807.240 18342 18342 I Unity   : Status Ad.Rewarded => Loading: Loading rewarded | AVNPLUGIN
+1729420807.900 18342 18342 W com.avn.demo: hiddenapi: Accessing hidden method Landroid/view/MotionEvent;->getHistoricalEventTimeNano(I)J (runtime_flags=0, domain=platform, api=max-target-o) from LWV/mh1;
+1729420808.100 18342 18342 I Unity   : [MaxAdsProvider.OnInterstitialLoadedEvent] SDKCallback | InterAd | Loaded | slot=0 unit=a1b2c3 network=AppLovin latencyMs=812 | AVNPLUGIN
+1729420808.110 18342 18342 I Unity   : [DiagnosticsHubAVNPlugin.IncrementAdsLoaded] Counter Ad.Interstitial.0 AdsLoaded=1 | AVNPLUGIN
+1729420808.120 18342 18342 I Unity   : Status Ad.Interstitial.0 => Loaded: Interstitial slot 0 loaded | AVNPLUGIN
+1729420808.300 18342 18470 W Ads: Not retrying to fetch app settings
+1729420809.500 18342 18342 W Unity   : SDKCallback | RewardAd | LoadFailed | unit=r9x8 code=NoFill msg=No Fill networkCode=204 networkMsg=No ad to show latencyMs=2201 | AVNPLUGIN
+1729420809.510 18342 18342 I Unity   : Counter Ad.Rewarded LoadCallsFailed=1 reason=Rewarded load failed: NoFill
+1729420809.520 18342 18342 I Unity   : Status Ad.Rewarded => Failed: Rewarded load failed: NoFill | AVNPLUGIN
+1729420810.400 18342 18342 I Unity   : Combo x4, score 1280
+1729420811.900 18342 18342 E Unity   : NullReferenceException: Object reference not set to an instance of an object
+1729420811.900 18342 18342 E Unity   :   at Game.UI.ShopPanel.Refresh () [0x00021] in ShopPanel.cs:88
+1729420811.900 18342 18342 E Unity   :   at Game.UI.ShopPanel.OnEnable () [0x00007] in ShopPanel.cs:41
+1729420811.900 18342 18342 E Unity   :   at UnityEngine.GameObject:SetActive(Boolean)
+1729420813.000 18342 18342 I Unity   : Status Analytics.Event => Sent: Custom event sent: Event=level_complete, Params=3 [level=1, stars=2, time_s=41.2] | AVNPLUGIN
+1729420813.020 18342 18375 V FA      : Logging event (FE): level_complete, Bundle[{firebase_event_origin(_o)=app, level=1, stars=2, time_s=41.2}]
+1729420813.500 18342 18342 I Unity   : Status Analytics.Event => Sent: Custom event sent: Event=tutorial_complete, Params=1 [step=5] | AVNPLUGIN
+1729420814.200 18342 18342 I Unity   : Counter Ad.Interstitial.0 ShowCallsSent=1
+1729420814.210 18342 18342 I Unity   : Status Analytics.Event => Sent: Firebase event handed to SDK: ad_interstitial (COUNT=1, SLOT=0) | AVNPLUGIN
+1729420814.230 18342 18375 V FA      : Logging event (FE): ad_interstitial, Bundle[{firebase_event_origin(_o)=app, COUNT=1, SLOT=0}]
+1729420814.900 18342 18342 I Unity   : SDKCallback | InterAd | Displayed | slot=0 unit=a1b2c3 network=AppLovin latencyMs=0 | AVNPLUGIN
+1729420814.950 18342 18480 E mali_winsys: Unrecognised Android chroma siting range: [2, 2]. Applying default
+1729420815.000 18342 18342 I Unity   : SDKCallback | InterAd | RevenuePaid | unit=a1b2c3 network=AppLovin latencyMs=0 revenue=0.0123 | AVNPLUGIN
+1729420815.010 18342 18342 I Unity   : Status Analytics.Event => Sent: Firebase event handed to SDK: ad_impression (ad_platform=AppLovin, ad_source=AppLovin, ad_unit_name=a1b2c3, ad_format=INTER, value=0.0123, currency=USD) | AVNPLUGIN
+1729420815.030 18342 18375 V FA      : Logging event (FE): ad_impression(_ai), Bundle[{firebase_event_origin(_o)=app, ad_platform=AppLovin, value=0.0123, currency=USD}]
+1729420815.400 18342 18480 E mali_winsys: Unrecognised Android chroma siting range: [2, 2]. Applying default
+1729420816.200 18342 18480 E mali_winsys: Unrecognised Android chroma siting range: [2, 2]. Applying default
+1729420818.700 18342 18350 W com.avn.demo: Suspending all threads took: 7.523ms
+1729420819.000 18342 18342 I Unity   : SDKCallback | InterAd | Closed | slot=0 unit=a1b2c3 network=AppLovin latencyMs=0 | AVNPLUGIN
+1729420819.010 18342 18342 I Unity   : Status Ad.Interstitial.0 => Closed: Interstitial slot 0 closed | AVNPLUGIN
+1729420820.100 18342 18342 W Unity   : Interstitial not ready, retrying in 2 s
+1729420821.500 18342 18342 I Unity   : Progress saved (14 KB)
+1729420822.000 18342 18342 I Unity: Status Analytics.Event => Sent: Custom event sent: Event=level_start, Params=2 [level=2, mode=classic] | AVNPLUGIN
+1729420822.020 18342 18375 V FA: Logging event (FE): level_start, Bundle[{firebase_event_origin(_o)=app, level=2, mode=classic}]
+1729420826.000 18342 18350 I com.avn.demo: Background concurrent copying GC freed 3948KB AllocSpace bytes, 79(3948KB) LOS objects, 49% free, 13MB/27MB, paused 1.138ms,296us total 269.447ms
+1729420828.300 18342 18470 W Ads: Not retrying to fetch app settings
+1729420830.100 18342 18342 W Unity: <color=#0099bc><b>DOTWEEN ► </b></color>An error inside a tween callback was taken care of (Void <PlayEntranceAnimation>b__61_2(UnityEngine.ParticleSystem)) ► Object reference not set to an instance of an object.
+1729420834.000 18342 18342 I Unity: Counter Ad.Interstitial.0 ShowCallsSent=2
+1729420834.700 18342 18342 I Unity: SDKCallback | InterAd | Displayed | slot=0 unit=a1b2c3 network=AppLovin latencyMs=0 | AVNPLUGIN
+1729420834.900 18342 18480 E mali_winsys: Unrecognised Android chroma siting range: [2, 2]. Applying default
+1729420835.000 18342 18342 I Unity: SDKCallback | InterAd | RevenuePaid | unit=a1b2c3 network=AppLovin latencyMs=0 revenue=0.0118 | AVNPLUGIN
+1729420838.000 18342 18342 I Unity: SDKCallback | InterAd | Closed | slot=0 unit=a1b2c3 network=AppLovin latencyMs=0 | AVNPLUGIN
+1729420838.400 18342 18400 E AppLovinSdk: [AppLovinSdk] Unknown ad format: REWARDED_INTER
+1729420840.000 18342 18342 I Unity: Progress saved (15 KB)

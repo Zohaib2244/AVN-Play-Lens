@@ -1,0 +1,27 @@
+{
+  "name": "avn-playlens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local web console for testing Unity Android builds: devices, QR pairing, live logs, AVN plugin and Firebase checks.",
+  "type": "module",
+  "workspaces": [
+    "packages/server",
+    "packages/web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "npm run build && node packages/server/bin/avn-playlens.mjs",
+    "replay": "npm run build && node packages/server/bin/avn-playlens.mjs --replay",
+    "build": "npm run build -w packages/web",
+    "dev:server": "node packages/server/bin/avn-playlens.mjs --dev --replay",
+    "dev:web": "npm run dev -w packages/web",
+    "test": "node --test \"packages/server/**/*.test.mjs\"",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
+}

@@ -7,6 +7,7 @@ import { ChecklistRun } from './checklist.mjs';
 import { buildReport } from './report.mjs';
 import { adRules, privacy, sdkList } from './checks.mjs';
 import { PerfModel } from '../perf/sampler.mjs';
+import { buildMatch, BuildVerification } from './build-report.mjs';
 
 const CRASH_KINDS = new Set(['java-crash', 'native-crash', 'anr', 'exception']);
 const ALERT_EVERY_MS = 30000;
@@ -27,6 +28,7 @@ export class Monitor extends EventEmitter {
     this.firebase = new FirebaseEvents();
     this.perf = new PerfModel();
     this.app = null;        // installed app profile (version, target API, permissions)
+    this.buildReport = null;
     this.apkSdks = null;    // SDKs found inside the APK
     this.hiddenApi = 0;
     this.loadRules();
@@ -73,6 +75,8 @@ export class Monitor extends EventEmitter {
       if (this.crashes.length > 200) this.crashes.shift();
     }
     if (this.run && !this.run.finishedAt && e.ts >= this.run.startedAt) {
+      this.run.health.ingest(e);
+      this.run.verification.ingest(e);
       if (ev) this.run.ingestEvent(ev);
       this.run.ingestEntry(e);
     }
@@ -80,10 +84,15 @@ export class Monitor extends EventEmitter {
   }
 
   startRun(file) {
+    const match = buildMatch(this.buildReport, this.pkg, this.app);
+    if (!match.ok) throw new Error(match.reason);
     const f = file ?? this.profileFile;
     const { doc, error } = f ? this.rules.read(f) : { doc: null, error: 'no rules file' };
     if (!doc) throw new Error(error || 'Rules file not found');
     this.run = new ChecklistRun({ profile: doc, profileFile: f, pack: this.rules.pack() });
+    this.run.verification = new BuildVerification(this.buildReport, this.app);
+    this.run.health = new Health(this.rules.pack(), this.health.options);
+    this.run.health.pkg = this.pkg;
     this.lastReport = null;
     this.dirty = true;
     return this.run;
@@ -92,11 +101,11 @@ export class Monitor extends EventEmitter {
   finishRun() {
     if (!this.run) throw new Error('No run in progress');
     this.run.finishedAt = Date.now();
-    const health = this.health.snapshot();
+    const health = this.run.health.snapshot();
     const items = this.run.evaluate(health);
     const id = `run-${new Date(this.run.startedAt).toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
     const crashes = this.crashes.filter((c) => c.ts >= this.run.startedAt);
-    this.lastReport = buildReport({ id, run: this.run, items, flags: this.flags.list(), crashes, health, device: this.deviceName, pkg: this.pkg });
+    this.lastReport = buildReport({ id, run: this.run, items, flags: this.flags.list(), crashes, health, device: this.deviceName, pkg: this.pkg, build: this.run.verification.snapshot() });
     this.dirty = true;
     return this.lastReport;
   }
@@ -124,6 +133,8 @@ export class Monitor extends EventEmitter {
       privacy: privacy(this.health, this.app, { hiddenApi: this.hiddenApi, now }),
       sdkList: sdkList(this.health, this.apkSdks),
       app: this.app,
+      buildReport: this.buildReport,
+      buildMatch: buildMatch(this.buildReport, this.pkg, this.app),
       flags: this.flags.list(),
       firebase: this.firebase.snapshot(now, this.firebaseDebug),
       crashes: this.crashes.slice(-50),
@@ -133,7 +144,9 @@ export class Monitor extends EventEmitter {
         finishedAt: this.run.finishedAt,
         file: this.run.profileFile,
         name: this.run.profileName,
-        items: this.run.evaluate(health),
+        items: this.run.evaluate(this.run.health.snapshot(this.run.finishedAt || now)),
+        build: this.run.verification.snapshot(),
+        rc: this.run.health.snapshot(this.run.finishedAt || now).rc,
       } : null,
       report: this.lastReport,
     };

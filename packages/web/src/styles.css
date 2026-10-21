@@ -332,8 +332,10 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Firebase + checklist */
 .table-scroll { overflow-x: auto; }
-.report-heading .input { background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 40px; }
-.report-heading .input:focus { outline: 2px solid var(--warm); outline-offset: 2px; }
+.build-upload .input, .report-heading .input, .report-filters .input { background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 40px; }
+.build-fields .input, .import-rows .input { width: 100%; }
+.build-upload .input:focus, .report-heading .input:focus, .report-filters .input:focus { outline: 2px solid var(--warm); outline-offset: 2px; }
+.build-upload .warn { color: var(--warn); }
 .verification-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
 .verification-table th { color: var(--dim); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; background: var(--well); }
 .verification-table td, .verification-table th { padding: 14px 20px; border-top: 1px solid var(--line-soft); vertical-align: top; }
@@ -343,6 +345,19 @@ button, input, select { font: inherit; color: inherit; }
 .report-heading h2, .build-upload h2 { font-size: 19px; margin: 0; }
 .report-heading p { margin: 7px 0; font-size: 13px; }
 .report-heading input { max-width: 250px; }
+.report-filters { display: flex; gap: 12px; padding: 0 22px 18px; flex-wrap: wrap; }
+.report-filters input { flex: 1; min-width: 180px; }
+.report-filters select { width: auto; }
+.build-upload { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.build-upload p { line-height: 1.6; }
+.build-attached { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px; background: var(--well); border-radius: 10px; }
+.build-attached .mono { flex-basis: 100%; overflow-wrap: anywhere; }
+.import-progress { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.import-review { margin-top: 18px; border: 1px solid var(--line); padding: 16px; border-radius: 12px; }
+.build-fields { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.build-fields label { flex: 1 1 140px; display: flex; flex-direction: column; gap: 7px; }
+.import-rows { max-height: 420px; margin-top: 14px; }
+.import-rows input { min-width: 220px; }
 .rc-value pre { white-space: pre-wrap; max-height: 300px; overflow: auto; }
 .rc-value { white-space: pre-wrap; }
 .sdk-FA { background: var(--warn-soft); color: var(--warn); }

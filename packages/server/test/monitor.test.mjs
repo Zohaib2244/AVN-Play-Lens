@@ -167,6 +167,8 @@ test('checklist run, rules template, report', async () => {
   const rules = rulesWithProfile(profile);
   assert.equal(rules.forGame(PKG), `${PKG}.yaml`);
   const m = new Monitor({ rules, pkg: PKG, deviceName: 'Test' });
+  m.app = { versionName: '1.0', versionCode: 1, permissions: [], sensitive: [] };
+  m.buildReport = { id: 'test-report', packageId: PKG, versionName: '1.0', versionCode: '1', rows: [] };
   const entries = demoEntries();
   m.run = null;
   const run = m.startRun();

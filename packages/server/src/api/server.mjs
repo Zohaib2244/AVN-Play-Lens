@@ -15,10 +15,11 @@ import { firebaseDebugStatus, setFirebaseDebug, FIREBASE_COMMANDS } from '../dev
 import { replaySource, REPLAY_SERIAL, replayProfile } from '../replay/source.mjs';
 import { Monitor } from '../monitor/monitor.mjs';
 import { readReport } from '../monitor/report.mjs';
+import { BuildReportStore } from '../monitor/build-report.mjs';
 import { SessionRecorder, listSessions, sessionText, sessionDetails, deleteSession } from '../session/recorder.mjs';
 import { spawn } from 'node:child_process';
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
 const ADDRESS_RE = /^[\w.-]+:\d{2,5}$/;
 
 export function createServer(ctx) {
@@ -43,13 +44,13 @@ export function createServer(ctx) {
   const isReplay = (serial) => serial === REPLAY_SERIAL && ctx.replay;
   const profiles = new Map();
   const games = ctx.games ?? new GameLibrary();
+  const buildReports = ctx.buildReports ?? new BuildReportStore();
   const inventory = ctx.adb ? new GameInventory(ctx.adb) : null;
-
-  const readJson = (req) => new Promise((resolve, reject) => {
+  const readJson = (req, limit = 512 * 1024) => new Promise((resolve, reject) => {
     let data = ''; let bytes = 0;
-    req.on('data', (c) => { bytes += c.length; if (bytes <= 512 * 1024) data += c; });
+    req.on('data', (c) => { bytes += c.length; if (bytes <= limit) data += c; });
     req.on('end', () => {
-      if (bytes > 512 * 1024) return reject(Object.assign(new Error('Request is too large'), { statusCode: 413 }));
+      if (bytes > limit) return reject(Object.assign(new Error('Request is too large'), { statusCode: 413 }));
       try { resolve(JSON.parse(data || '{}')); }
       catch { reject(Object.assign(new Error('Invalid JSON'), { statusCode: 400 })); }
     });
@@ -62,6 +63,21 @@ export function createServer(ctx) {
 
     if (req.method === 'GET' && area === 'status') return send(res, 200, ctx.status());
     if (req.method === 'GET' && area === 'devices' && !id) return send(res, 200, ctx.devices());
+
+    if (area === 'build-reports') {
+      if (req.method === 'GET' && id?.endsWith('.pdf')) {
+        const pdf = buildReports.pdf(id.slice(0, -4));
+        return pdf ? download(res, pdf, 'application/pdf', 'publishing-report.pdf') : send(res, 404, { error: 'Publishing report not found' });
+      }
+      if (req.method === 'GET' && id) return send(res, 200, { report: buildReports.get(id) });
+      if (req.method === 'POST' && !id) {
+        try {
+          const report = buildReports.save(await readJson(req, 30 * 1024 * 1024));
+          for (const m of liveMonitors) if (m.pkg === report.packageId) { m.buildReport = report; m.dirty = true; }
+          return send(res, 201, { report });
+        } catch (err) { return send(res, err.statusCode || 400, { error: err.message }); }
+      }
+    }
 
     if (area === 'games') {
       if (req.method === 'GET' && !id) return send(res, 200, games.list());
@@ -280,6 +296,7 @@ export function createServer(ctx) {
     let resumeCapture = null;
     let capturePaused = false;
     let capturePackage = null;
+    let captureSerial = null;
     const out = (msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
     out({ type: 'hello', status: ctx.status(), devices: ctx.devices(), pair: ctx.pairing?.state() ?? { state: 'idle' } });
 
@@ -314,7 +331,7 @@ export function createServer(ctx) {
       if (!pkg) return;
       if (isReplay(serial)) {
         const r = replayProfile(pkg);
-        Object.assign(m, { app: r.app, apkSdks: r.sdks });
+        Object.assign(m, { app: { ...r.app, replay: true }, apkSdks: r.sdks });
         m.health.debuggable = r.app.debuggable;
         return;
       }
@@ -341,6 +358,7 @@ export function createServer(ctx) {
         if (ws.readyState !== 1) return;
         ending = false;
         capturePackage = pkg;
+        captureSerial = msg.serial;
         const streamId = msg.streamId;
         currentStreamId = streamId;
         let m = ctx.rules ? new Monitor({ rules: ctx.rules, pkg, deviceName: deviceName(msg.serial) }) : null;
@@ -349,6 +367,7 @@ export function createServer(ctx) {
         recorder = rec;
         lastCaptureId = rec?.id ?? null;
         if (m) {
+          m.buildReport = buildReports.get(pkg);
           liveMonitors.add(m);
           m.on('alert', (a) => out({ type: 'alert', streamId, ...a }));
           refreshFirebase(msg.serial, pkg, m);
@@ -367,7 +386,10 @@ export function createServer(ctx) {
             old?.finish(m.summary(), captureOptions()).catch((err) => out({ type: 'error', message: err.message }));
             liveMonitors.delete(m);
             sampler?.stop();
+            const ongoingRun = m.run;
             m = new Monitor({ rules: ctx.rules, pkg, deviceName: deviceName(msg.serial) });
+            m.run = ongoingRun;
+            m.buildReport = buildReports.get(pkg);
             m.processPid = pid;
             monitor = m;
             liveMonitors.add(m);
@@ -451,7 +473,14 @@ export function createServer(ctx) {
       } else if (msg.type === 'firebase.refresh' && monitor) {
         refreshFirebase(msg.serial, monitor.pkg, monitor);
       } else if (msg.type === 'run.start' && monitor) {
-        try { monitor.startRun(msg.file); } catch (err) { out({ type: 'error', message: err.message }); }
+        try {
+          // Re-read the installed build at the moment the run starts.
+          if (isReplay(captureSerial)) monitor.app = { ...replayProfile(monitor.pkg).app, replay: true };
+          else if (ctx.adb && captureSerial) monitor.app = await readAppProfile(ctx.adb, captureSerial, monitor.pkg);
+          monitor.buildReport = buildReports.get(monitor.pkg);
+          monitor.startRun(msg.file);
+          out({ type: 'monitor', streamId: currentStreamId, ...monitor.snapshot() });
+        } catch (err) { out({ type: 'error', message: err.message }); }
       } else if (msg.type === 'run.finish' && monitor) {
         try { out({ type: 'run.report', ...monitor.finishRun() }); } catch (err) { out({ type: 'error', message: err.message }); }
       } else if (msg.type === 'rules.reload' && monitor) {

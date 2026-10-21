@@ -4,6 +4,8 @@ import { api } from '../api.js';
 import { Menu, Disclosure, LiveBars, SkeletonRows } from '../components/ui.jsx';
 import { PageHead, Check } from '../components/bits.jsx';
 import { Stepper } from './Firebase.jsx';
+import { BuildReportUpload, BuildVerificationTable, useBuildReport } from '../components/BuildReport.jsx';
+import { RemoteConfigTable } from '../components/RemoteConfigTable.jsx';
 
 const SEVERITY_TAG = { critical: 'tag-bad', warning: 'tag-warn', info: 'tag-plain' };
 
@@ -32,6 +34,9 @@ export function ChecklistSetup() {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const run = monitor?.run;
+  const build = useBuildReport(pkg, monitor);
+  const [starting, setStarting] = useState(null);
+  useEffect(() => { if (starting != null && run?.active && run.startedAt > starting) { setStep(3); setStarting(null); } }, [run?.startedAt, run?.active, starting]);
   const elapsed = useClock(run?.startedAt, !!run?.active);
 
   useEffect(() => {
@@ -53,8 +58,8 @@ export function ChecklistSetup() {
   const chosen = rules?.files.find((f) => f.file === file);
   const hasOwn = rules?.files.some((f) => f.game === pkg);
   const start = () => {
+    setStarting(run?.startedAt || 0);
     send({ type: 'run.start', file });
-    setStep(3);
   };
   const items = run?.items ?? [];
   const ok = items.filter((i) => i.status === 'ok').length;
@@ -67,12 +72,13 @@ export function ChecklistSetup() {
           {run && <button className="linkish" onClick={() => setView('checklist')}>Run already going? Open the checklist</button>}
         </div>
         <h1 className="setup-title">Set up a test run</h1>
-        <p className="mute" style={{ margin: '0 0 34px', fontSize: 16, lineHeight: 1.6, maxWidth: 600 }}>Pick the rules for {pkg}, start a run, then play. Each expected event ticks off as Firebase logs it.</p>
-        <Stepper step={step} labels={['Rules file', 'Start run', 'Play']} />
+        <p className="mute" style={{ margin: '0 0 34px', fontSize: 16, lineHeight: 1.6, maxWidth: 600 }}>Attach the publishing report for {pkg}, choose its rules, then play to verify the build.</p>
+        <Stepper step={step} labels={['Report & rules', 'Start run', 'Play']} />
 
         <div className="card setup-card">
           {step === 1 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
+              <BuildReportUpload pkg={pkg} report={build.report} matches={build.matches} reason={build.reason} onSaved={build.setReport} />
               <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Choose the rules for this game</h2>
               <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>A rules file lists the events you expect and extra log lines to flag. Edit it in any editor; the checklist updates when you save.</p>
               {!rules && <SkeletonRows rows={3} />}
@@ -120,7 +126,8 @@ export function ChecklistSetup() {
                 </div>
               )}
               <div style={{ marginTop: 'auto', paddingTop: 22 }}>
-                <button className="btn btn-warm" style={{ height: 44 }} onClick={start} disabled={!file}><span className="dot" style={{ background: 'var(--warm-ink)' }} />Start run</button>
+                <p className={build.matches ? 'mute' : 'warn'}>{build.reason}</p>
+                <button className="btn btn-warm" style={{ height: 44 }} onClick={start} disabled={!file || !build.matches}><span className="dot" style={{ background: 'var(--warm-ink)' }} />Start run</button>
               </div>
             </div>
           )}
@@ -143,7 +150,7 @@ export function ChecklistSetup() {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, minHeight: 44 }}>
           {step > 1 && step < 3 ? <button className="btn" onClick={() => setStep(step - 1)}>Back</button> : <span />}
-          {step === 1 && <button className="btn btn-warm" onClick={() => setStep(2)} disabled={!file || !!chosen?.error}>Next</button>}
+          {step === 1 && <button className="btn btn-warm" onClick={() => setStep(2)} disabled={!file || !!chosen?.error || !build.matches}>Next</button>}
         </div>
       </div>
     </main>
@@ -187,6 +194,7 @@ export function Checklist() {
       {report && !run.active && (
         <div className="card rise" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '16px 20px', borderColor: '#2f6a50', background: '#17221d' }}>
           <span className="px" style={{ fontSize: 18 }}>Report ready: {report.passed} of {report.total} passed</span>
+          <span className="mute">{report.buildVerified ?? 0} of {report.buildTotal ?? 0} For Dev items verified</span>
           <span style={{ flex: '1 1 0' }} />
           <a className="btn btn-sm" href={`/api/reports/${report.id}.html?view=1`} target="_blank" rel="noreferrer">Open report</a>
           <Menu label="Save report" items={[
@@ -195,6 +203,9 @@ export function Checklist() {
           ]} />
         </div>
       )}
+
+      <BuildVerificationTable build={run.build} showInLogs={showInLogs} />
+      <RemoteConfigTable rc={run.rc} showInLogs={showInLogs} />
 
       <div className="card" style={{ padding: '22px 24px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '8px 24px', marginBottom: 16 }}>

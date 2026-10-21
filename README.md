@@ -8,7 +8,7 @@ A local web console for testing Unity Android builds. It runs on your Mac or PC 
 - **Performance:** FPS and frame times (from SurfaceFlinger), CPU, GPU (where the phone allows it), memory, temperature and throttling, sampled every second with graphs of the session. Plus the phone's and the game build's details.
 - **Plugin health:** the launch timeline in ms, the AVN plugin's startup sequence, SDKs it verifies plus other SDKs found in the APK and logs, MAX adapters, ad funnels from load to paid, ad rules checked against the AdConfig values, consent and privacy, remote config with the actual values, and what needs a look.
 - **Firebase events:** turns on Firebase debug mode for you, then shows every event Firebase logs with its values. The plugin's lines double-check that nothing was sent but not recorded.
-- **Checklist:** expected events and parameters from a rules file, ticked off live during a test run, with an HTML / Markdown report at the end.
+- **Checklist:** attach the plugin’s publishing PDF, match its package/version/build to the installed app, and verify its For Dev items with fresh runtime evidence. Original build results stay in their own column. Expected events and parameters are checked from the game’s rules file. Export HTML / Markdown, or open the report and print/save as PDF.
 
 ## Get it
 
@@ -82,6 +82,10 @@ The plugin checks themselves are in `rules/packs/avn-plugin.yaml`, written from 
 ## Game workspaces
 
 Home is your game library. Add a game name, Android package ID (for example `com.studio.game`) and optional PNG, JPEG or WebP icon (up to 250 KB). Icons and game IDs stay in `~/.avn-playlens/games.json`. Open a tile to enter its workspace; edit the ID or icon and remove the library entry from that game's page. Removing an entry keeps the installed game and saved captures.
+
+Checklist setup requires a publishing report before starting a run. Text PDFs are read directly; image/outlined PDFs use bundled English OCR locally, without an external service. Review and correct the extracted identity and For Dev rows before attaching. Originals and imported rows are stored under `~/.avn-playlens/build-reports/`. Package, version and build number must match; increment the build number on every rebuild because reused numbers cannot identify a different binary. Logs, Firebase and Plugin health remain available without a report.
+
+For Dev results distinguish **Verified** (the behavior described in the evidence occurred during this run), **Matches installed build** (static package settings), **Not verified**, **Problem**, **Manual check**, and **Not enabled**. SDK initialization is not proof of every SDK feature. Analytics is verified on-device, not at the backend. An ad unit needs matching unit-ID evidence; generic counters cannot verify a primary/backfill unit. Unity editor settings, SDK keys and dashboard delivery remain manual where logs cannot prove them. Replay results are labeled as simulated.
 
 Firebase and Plugin health show a Remote Config variables table with values, observed data types, registered custom types, source (Remote/Default/Static/Cache/Unknown), timestamps and log links. JSON fields are listed individually. Only values emitted by the plugin can be shown; truncated payloads are identified. To expose additional keys, the Unity plugin must log their key, type, source and value (custom registration/dispatch lines are already supported). The tool does not infer unlogged server values from the build report.
 

@@ -6,7 +6,7 @@ import { api, connectSocket } from './api.js';
 
 const AppContext = createContext(null);
 const MAX_LINES = 50000;
-const GAME_VIEWS = new Set(['game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'checklist', 'checklist-setup', 'game-sessions']);
+const THROWAWAY_MS = 30000;
 const ALERT_KINDS = { exception: 'Unity exception', 'java-crash': 'App crashed (Java)', 'native-crash': 'App crashed (native)', anr: 'App not responding (ANR)' };
 
 export function AppProvider({ children }) {
@@ -14,7 +14,10 @@ export function AppProvider({ children }) {
   const [devices, setDevices] = useState([]);
   const [pair, setPair] = useState({ state: 'idle' });
   const [online, setOnline] = useState(false);
-  const [view, setView] = useState('home');
+  const [view, setViewRaw] = useState('home');
+  // Open while you're inside a game: from opening it in the library until you go back there.
+  const [inGame, setInGame] = useState(false);
+  const setView = useCallback((v) => { if (v === 'home') setInGame(false); setViewRaw(v); }, []);
   const [serial, setSerial] = useState(null);
   const [pkg, setPkg] = useState(null);
   const [games, setGames] = useState([]);
@@ -194,7 +197,7 @@ export function AppProvider({ children }) {
       setPkg(null);
       setView('home');
     }
-  }, [games, gamesLoaded, pkg]);
+  }, [games, gamesLoaded, pkg, setView]);
 
   const send = useCallback((msg) => socket.current?.send(msg), []);
 
@@ -204,7 +207,7 @@ export function AppProvider({ children }) {
   useEffect(() => setStopped(false), [serial, pkg]);
 
   const game = games.find((g) => g.packageId === pkg) || null;
-  const inGameWorkspace = !!game && (GAME_VIEWS.has(view) || (view === 'saved-session' && archiveReturn === 'game-sessions'));
+  const inGameWorkspace = !!game && inGame && view !== 'connect';
   const installedGame = gameInventory.serial === serial && gameInventory.games.find((g) => g.packageId === pkg)?.installed;
   const captureEnabled = inGameWorkspace && view !== 'saved-session' && !!installedGame;
   useEffect(() => {
@@ -256,11 +259,19 @@ export function AppProvider({ children }) {
     setHistoryVersion((v) => v + 1);
   }, [send, resetCapture, sessionId]);
   const saveSession = useCallback(() => send({ type: 'session.save', streamId: streamId.current }), [send]);
-  const reviewSession = useCallback((id) => { setArchivedId(id); setArchiveReturn(inGameWorkspace ? 'game-sessions' : 'sessions'); setView('saved-session'); }, [inGameWorkspace]);
+  const reviewSession = useCallback((id) => { setArchivedId(id); setArchiveReturn(inGameWorkspace ? 'game-sessions' : 'sessions'); setView('saved-session'); }, [inGameWorkspace, setView]);
 
   const selectGame = useCallback((packageId) => { setFollow(false); setPkg(packageId); }, []);
-  const openGame = useCallback((packageId) => { setFollow(false); setPkg(packageId); setView('game'); }, []);
-  const viewGameSessions = useCallback((packageId = '__all') => { setHistoryGame(packageId); setView(packageId === '__all' ? 'sessions' : 'game-sessions'); if (packageId !== '__all') setPkg(packageId); }, []);
+  const openGame = useCallback((packageId) => { setFollow(false); setPkg(packageId); setInGame(true); setView('logs'); }, [setView]);
+  const viewGameSessions = useCallback((packageId = '__all') => {
+    setHistoryGame(packageId);
+    setView(packageId === '__all' ? 'sessions' : 'game-sessions');
+    if (packageId !== '__all') { setPkg(packageId); setInGame(true); }
+  }, [setView]);
+  // A restart within a few seconds of the last one would otherwise leave a near-empty saved
+  // session behind each time. Keep it if you saved it or it caught a crash.
+  const throwaway = useCallback(() => !!session && !session.saved && !!session.startedAt
+    && Date.now() - session.startedAt < THROWAWAY_MS && !lines.current.some((e) => ALERT_KINDS[e.kind]), [session]);
   const performGameAction = useCallback(async (packageId, action) => {
     if (actionBusy || !serial || !online) return;
     setActionBusy(`${packageId}:${action}`);
@@ -271,7 +282,7 @@ export function AppProvider({ children }) {
           captureWaiter.current = { pkg: packageId, serial, resolve: (s) => { clearTimeout(timer); captureWaiter.current = null; resolve(s); } };
         });
         selectGame(packageId);
-        if (pkg === packageId) newSession('save');
+        if (pkg === packageId) newSession(throwaway() ? 'discard' : 'save');
         else setStopped(false);
         await ready;
       }
@@ -280,18 +291,18 @@ export function AppProvider({ children }) {
       refreshApps();
     } catch (err) { showToast({ title: `Could not ${action} the game`, msg: err.message }); }
     finally { setActionBusy(null); }
-  }, [actionBusy, serial, online, pkg, newSession, selectGame, refreshApps, showToast]);
+  }, [actionBusy, serial, online, pkg, newSession, selectGame, refreshApps, showToast, throwaway]);
 
   const value = useMemo(() => ({
     status, devices, pair, online, view, setView, serial, setSerial, selectDevice, pkg, setPkg, follow, setFollow, apps, refreshApps, send,
     device: devices.find((d) => d.serial === serial) ?? null,
-    game, inGameWorkspace, openGame, archiveReturn,
+    game, inGameWorkspace, openGame, archiveReturn, installed: installedGame,
     games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, setHistoryGame, viewGameSessions,
     session, captureVersion, historyVersion, setHistoryVersion, newSession, saveSession, archivedId, reviewSession,
     lines, version, stream, rate, monitor, sessionId, toast, setToast, showToast, alerts, setAlerts, lastReport, setLastReport,
     focusEntry, setFocusEntry, stopped, setStopped, groups, perf, perfSummary, perfVersion,
     showInLogs: (entryId) => { setFocusEntry(entryId); setView('logs'); },
-  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion, session, captureVersion, historyVersion, newSession, saveSession, archivedId, reviewSession, games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, viewGameSessions, game, inGameWorkspace, openGame, archiveReturn]);
+  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion, session, captureVersion, historyVersion, newSession, saveSession, archivedId, reviewSession, games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, viewGameSessions, game, inGameWorkspace, openGame, archiveReturn, installedGame, setView]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -341,18 +352,13 @@ export function secs(ms) {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
-// Short statuses for the rail and home tiles, from the live monitor.
-export function viewStatus(monitor, perf) {
-  const issues = (monitor?.flags ?? []).filter((f) => f.severity !== 'info').length;
-  const fb = monitor?.firebase;
-  const run = monitor?.run;
-  const items = run?.items ?? [];
-  const fps = perf?.fps?.last;
-  const mem = perf?.mem?.last;
-  return {
-    performance: fps != null || mem != null ? { text: [fps != null && `${Math.round(fps)} FPS`, mem != null && `${Math.round(mem)} MB`].filter(Boolean).join(' · '), cls: fps != null && fps < 30 ? 'warm' : 'ok' } : { text: 'FPS, CPU, memory', cls: '' },
-    health: !monitor?.health?.seen ? { text: 'Waiting for plugin lines', cls: '' } : issues ? { text: `${issues} to look at`, cls: 'warm' } : { text: 'All good', cls: 'ok' },
-    firebase: fb?.debug?.on ? { text: `Listening · ${fb.counts.firebase} logged`, cls: 'ok', ready: true } : { text: 'Needs setup', cls: 'warm', ready: false },
-    checklist: run?.active ? { text: `Run live · ${items.filter((i) => i.status === 'ok').length} of ${items.length}`, cls: 'ok', ready: true } : run ? { text: 'Run finished', cls: '', ready: true } : { text: 'Needs setup', cls: 'warm', ready: false },
-  };
+// Things that need a look, per tab. Only counts: nothing here means nothing to do.
+export function tabBadges(monitor) {
+  if (!monitor) return {};
+  const health = (monitor.flags ?? []).filter((f) => f.severity !== 'info').length
+    + (monitor.adRules?.checks ?? []).filter((c) => c.status === 'problem').length
+    + (monitor.privacy ?? []).filter((c) => c.status === 'problem').length;
+  const firebase = monitor.firebase?.counts?.notLogged ?? 0;
+  const checklist = (monitor.run?.items ?? []).filter((i) => i.status === 'problem').length;
+  return { health, firebase, checklist };
 }

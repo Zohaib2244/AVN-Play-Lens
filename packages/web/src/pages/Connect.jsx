@@ -63,21 +63,21 @@ export function Connect() {
         <Logo size={26} />
         <span className="px" style={{ fontSize: 20, fontWeight: 600 }}>AVN PlayLens</span>
         <span style={{ flex: '1 1 0' }} />
-        <button className="btn" onClick={() => setView('home')}><Icon.back /> Back home</button>
+        <button className="btn" onClick={() => setView('home')}><Icon.back /> Back to library</button>
       </header>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '48px 72px', paddingTop: 40 }}>
         <section className="rise" style={{ flex: '1 1 380px', maxWidth: 480, minWidth: 0 }}>
           <span className="eyebrow">Wireless debugging · Android 11 and up</span>
           <h1 className="hero-title">Scan to connect</h1>
-          <p className="mute" style={{ margin: '0 0 26px', fontSize: 16.5, lineHeight: 1.65 }}>
+          <p className="mute" style={{ margin: '0 0 26px', fontSize: 16, lineHeight: 1.65 }}>
             On your phone, open <span style={{ color: 'var(--text)' }}>Developer options</span>, then <span style={{ color: 'var(--text)' }}>Wireless debugging</span>, then <span style={{ color: 'var(--text)' }}>Pair device with QR code</span>, and point it at the screen.
           </p>
-          <div style={{ borderTop: '1px solid #2E2620', borderBottom: '1px solid #2E2620', padding: '6px 0' }}>
+          <div style={{ borderTop: '1px solid var(--line-soft)', borderBottom: '1px solid var(--line-soft)', padding: '6px 0' }}>
             {STEPS.map((s, i) => (
               <div key={s.key} className={`st${i < step || pair.state === 'connected' ? ' done' : i === step ? (failed ? ' act fail' : ' act') : ''}`}>
                 <span className="sn mono">{i + 1}</span>
-                <span style={{ fontSize: 15.5 }}>{s.title}</span>
+                <span style={{ fontSize: 16 }}>{s.title}</span>
               </div>
             ))}
           </div>
@@ -96,7 +96,7 @@ export function Connect() {
                 <input id="code" className="field" placeholder="482913" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} />
               </div>
               <button className="btn" style={{ flex: '1 1 100%', height: 42 }} disabled={busy || !address || !code}>{busy ? <><Spinner />Pairing…</> : 'Pair and connect'}</button>
-              {manualError && <div style={{ color: 'var(--bad)', fontSize: 13.5 }}>{manualError}</div>}
+              {manualError && <div style={{ color: 'var(--bad)', fontSize: 14 }}>{manualError}</div>}
             </form>
           </details>
         </section>
@@ -125,10 +125,10 @@ export function Connect() {
               </div>
             </div>
           </div>
-          <div style={{ fontSize: 15.5, textAlign: 'center', color: failed ? 'var(--bad)' : 'var(--text)', maxWidth: 380 }}>{caption}</div>
+          <div style={{ fontSize: 16, textAlign: 'center', color: failed ? 'var(--bad)' : 'var(--text)', maxWidth: 380 }}>{caption}</div>
           {failed && <button className="btn" onClick={() => api('pair/qr', { method: 'POST' })}>Try again with a new code</button>}
-          {pair.state === 'connected' && <button className="btn btn-warm" onClick={() => setView('home')}>Back home</button>}
-          <div className="dim" style={{ fontSize: 13.5, textAlign: 'center', maxWidth: 340, lineHeight: 1.55 }}>Phone and computer need the same Wi-Fi. Office networks sometimes block this; a phone hotspot works.</div>
+          {pair.state === 'connected' && <button className="btn btn-warm" onClick={() => setView('home')}>Back to library</button>}
+          <div className="dim" style={{ fontSize: 14, textAlign: 'center', maxWidth: 340, lineHeight: 1.55 }}>Phone and computer need the same Wi-Fi. Office networks sometimes block this; a phone hotspot works.</div>
         </section>
       </div>
     </div>

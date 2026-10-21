@@ -48,7 +48,7 @@ export function PixelScene({ caption, ready }) {
         )}
       </svg>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 20px', borderTop: '1px solid var(--line)' }}>
-        <span className="mono dim" style={{ fontSize: 12.5 }}>{caption}</span>
+        <span className="mono dim" style={{ fontSize: 12 }}>{caption}</span>
         {ready ? <span className="tag tag-ok">Ready for Unity</span> : <span className="tag tag-plain">Waiting for a phone</span>}
       </div>
     </div>

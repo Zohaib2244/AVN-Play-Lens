@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { PageHead, Check, Lattice } from '../components/bits.jsx';
 import { Menu, LiveBars, Skeleton, Spinner } from '../components/ui.jsx';
 import { useAppAction } from './Logs.jsx';
+import { useGate } from '../components/Header.jsx';
 
 const CHECK = {
   'matches-plugin': ['Matches plugin', 'tag-ok'],
@@ -85,7 +86,7 @@ export function FirebaseSetup() {
     <main className="main" style={{ alignItems: 'center', paddingTop: 52 }}>
       <div style={{ width: '100%', maxWidth: 760 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px 16px' }}>
-          <span className="eyebrow">Firebase events · setup</span>
+          <span className="eyebrow">Events · setup</span>
           <button className="linkish" onClick={() => setView('firebase')}>Already set up? Skip to events</button>
         </div>
         <h1 className="setup-title">Let Firebase talk to you</h1>
@@ -97,46 +98,46 @@ export function FirebaseSetup() {
         <div className="card setup-card">
           {step === 1 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Turn on debug mode</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>Only for {pkg}, only on {deviceName(device)}. It stays on until you turn it off from the events screen.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Turn on debug mode</h2>
+              <p className="mute" style={{ margin: '0 0 20px', fontSize: 16, lineHeight: 1.6 }}>Only for {pkg}, only on {deviceName(device)}. It stays on until you turn it off from the events screen.</p>
               <span className="eyebrow" style={{ marginBottom: 8 }}>What this runs</span>
               <div className="cmd">{commands.map((c) => <div key={c}>{c}</div>)}</div>
               <div style={{ marginTop: 'auto', paddingTop: 22, minHeight: 44, display: 'flex', alignItems: 'center' }}>
                 {debugOn
-                  ? <span className="tag tag-ok" style={{ fontSize: 12.5, padding: '8px 12px' }}>Debug mode on for {pkg}</span>
+                  ? <span className="tag tag-ok" style={{ fontSize: 12, padding: '8px 12px' }}>Debug mode on for {pkg}</span>
                   : <button className="btn btn-warm" style={{ height: 44 }} onClick={turnOn} disabled={busy || !pkg}>{busy ? <><Spinner />Turning on…</> : 'Turn on debug mode'}</button>}
               </div>
             </div>
           )}
           {step === 2 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Restart the game</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>Firebase reads the setting when the game starts. You lose the current play session, not your saved progress.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Restart the game</h2>
+              <p className="mute" style={{ margin: '0 0 20px', fontSize: 16, lineHeight: 1.6 }}>Firebase reads the setting when the game starts. You lose the current play session, not your saved progress.</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, border: '1px solid var(--line)', borderRadius: 14, padding: '16px 18px', background: 'var(--well)', maxWidth: 540 }}>
                 <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <span className="mono" style={{ display: 'block', fontSize: 15 }}>{pkg}</span>
-                  <span className="dim" style={{ display: 'block', fontSize: 13, marginTop: 3 }}>{deviceName(device)}</span>
+                  <span className="mono" style={{ display: 'block', fontSize: 16 }}>{pkg}</span>
+                  <span className="dim" style={{ display: 'block', fontSize: 14, marginTop: 3 }}>{deviceName(device)}</span>
                 </span>
                 <span className={`tag ${stream.running || replay ? 'tag-ok' : 'tag-plain'}`}>{replay ? 'Replay' : stream.running ? (restarted ? 'Running · new process' : 'Running') : 'Not running'}</span>
               </div>
               <div style={{ marginTop: 'auto', paddingTop: 22, minHeight: 44, display: 'flex', alignItems: 'center' }}>
                 {replay ? <span className="dim">The replay device can't be restarted; go on to the next step.</span>
-                  : restarted ? <span className="tag tag-ok" style={{ fontSize: 12.5, padding: '8px 12px' }}>Restarted</span>
+                  : restarted ? <span className="tag tag-ok" style={{ fontSize: 12, padding: '8px 12px' }}>Restarted</span>
                     : <button className="btn btn-warm" style={{ height: 44 }} onClick={restart} disabled={busy}>{busy ? <><Spinner />Restarting…</> : 'Restart the game'}</button>}
               </div>
             </div>
           )}
           {step === 3 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Listening</h2>
-              <p className="mute" style={{ margin: '0 0 18px', fontSize: 15, lineHeight: 1.6 }}>Play for a moment. Events appear as Firebase logs them.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Listening</h2>
+              <p className="mute" style={{ margin: '0 0 18px', fontSize: 16, lineHeight: 1.6 }}>Play for a moment. Events appear as Firebase logs them.</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10 }}>
                 <Lattice />
-                <span style={{ fontSize: 15 }}><span className="mono" style={{ color: 'var(--warm)' }}>{caught}</span> events logged by Firebase so far</span>
+                <span style={{ fontSize: 16 }}><span className="mono" style={{ color: 'var(--warm)' }}>{caught}</span> events logged by Firebase so far</span>
               </div>
               <div style={{ maxWidth: 560, minHeight: 126 }}>
                 {recent.map((e) => (
-                  <div key={e.id} className="rise" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line-soft)', fontSize: 14.5, animationDuration: '.45s' }}>
+                  <div key={e.id} className="rise" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line-soft)', fontSize: 14, animationDuration: '.45s' }}>
                     <span className="tag sdk-FA">FA</span>
                     <span className="mono">{e.name}</span>
                     <span className={`tag ${CHECK[e.check][1]}`} style={{ marginLeft: 'auto' }}>{CHECK[e.check][0]}</span>
@@ -145,7 +146,7 @@ export function FirebaseSetup() {
                 {!recent.length && <div className="dim" style={{ fontSize: 14 }}>Nothing yet. If this stays empty after you play, restart the game once more.</div>}
               </div>
               <div style={{ marginTop: 'auto', paddingTop: 20 }}>
-                <button className="btn btn-warm" style={{ height: 44 }} onClick={() => setView('firebase')}>Open Firebase events</button>
+                <button className="btn btn-warm" style={{ height: 44 }} onClick={() => setView('firebase')}>Open events</button>
               </div>
             </div>
           )}
@@ -166,10 +167,12 @@ export function Firebase() {
   const [hideAuto, setHideAuto] = useState(false);
   const [open, setOpen] = useState(null);
   const fb = monitor?.firebase;
+  const gate = useGate('Events', !!fb);
+  if (gate) return gate;
   if (!fb) {
     return (
       <main className="main">
-        <PageHead title="Firebase events" />
+        <PageHead tab title="Events" />
         <div className="card" style={{ overflow: 'hidden' }} aria-busy="true" aria-label="Loading events">
           {Array.from({ length: 7 }, (_, i) => (
             <div key={i} className="erow" style={{ cursor: 'default' }}>
@@ -195,8 +198,9 @@ export function Firebase() {
   return (
     <main className="main">
       <PageHead
-        title="Firebase events"
-        sub={<>{pkg} on {deviceName(device)} · {fb.counts.firebase} logged by Firebase{fb.counts.notLogged ? <> · <span style={{ color: 'var(--bad)' }}>{fb.counts.notLogged} sent by the plugin but not logged</span></> : null}</>}
+        tab
+        title="Events"
+        sub={<>{fb.counts.firebase} logged by Firebase{fb.counts.notLogged ? <> · <span style={{ color: 'var(--bad)' }}>{fb.counts.notLogged} sent by the plugin but not logged</span></> : null}</>}
       >
         {fb.debug?.on && (fb.receiving ? <LiveBars label="Listening" /> : <span className="live paused">Waiting for Firebase lines</span>)}
         <Menu items={[
@@ -207,9 +211,9 @@ export function Firebase() {
       </PageHead>
 
       {!fb.debug?.on && (
-        <div className="card" style={{ padding: '14px 20px', borderColor: '#5a4a1e', background: '#221d14', fontSize: 14.5 }}>
-          <b style={{ color: 'var(--warn)' }}>Firebase debug mode is off,</b> <span className="mute">so Firebase isn't writing events to the log. </span>
-          <button className="linkish" onClick={() => setView('firebase-setup')}>Set it up</button>
+        <div className="card callout warn">
+          <span style={{ flex: '1 1 auto' }}><b className="warnc">Firebase debug mode is off,</b> <span className="mute">so Firebase isn't writing events to the log.</span></span>
+          <button className="btn btn-sm btn-warm" onClick={() => setView('firebase-setup')}>Set it up</button>
         </div>
       )}
 
@@ -229,11 +233,11 @@ export function Firebase() {
           return (
             <div key={r.id}>
               <button className={`erow${isOpen ? ' open' : ''}${r.missing ? ' missing' : r.problems?.length ? ' warn' : ''}`} onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
-                <span className="mono dim" style={{ fontSize: 12.5 }}>{clock(r.ts, false)}</span>
+                <span className="mono dim" style={{ fontSize: 12 }}>{clock(r.ts, false)}</span>
                 <span className={`tag sdk-${r.sdk}`} style={{ justifySelf: 'start' }}>{r.sdk}</span>
-                <span className="mono ename" style={{ fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                <span className="mono ename" style={{ fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
                 <span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {r.sdk === 'BB' ? <span className="dim mono" style={{ fontSize: 12.5 }}>{r.paramCount} params</span> : params.slice(0, 3).map(([k, v]) => <span key={k} className="chip" style={{ margin: '0 6px 0 0' }}><span className="dim">{k}</span>{String(v)}</span>)}
+                  {r.sdk === 'BB' ? <span className="dim mono" style={{ fontSize: 12 }}>{r.paramCount} params</span> : params.slice(0, 3).map(([k, v]) => <span key={k} className="chip" style={{ margin: '0 6px 0 0' }}><span className="dim">{k}</span>{String(v)}</span>)}
                 </span>
                 <span><span className={`tag ${checkCls}`}>{checkLabel}</span></span>
                 <svg className="car" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>

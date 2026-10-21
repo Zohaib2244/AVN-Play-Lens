@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useApp, deviceName, clock } from '../state.jsx';
+import { useApp, clock } from '../state.jsx';
 import { api } from '../api.js';
 import { Menu, Disclosure, LiveBars, SkeletonRows } from '../components/ui.jsx';
 import { PageHead, Check } from '../components/bits.jsx';
 import { Stepper } from './Firebase.jsx';
+import { useGate } from '../components/Header.jsx';
 
 const SEVERITY_TAG = { critical: 'tag-bad', warning: 'tag-warn', info: 'tag-plain' };
 
@@ -73,15 +74,15 @@ export function ChecklistSetup() {
         <div className="card setup-card">
           {step === 1 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Choose the rules for this game</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>A rules file lists the events you expect and extra log lines to flag. Edit it in any editor; the checklist updates when you save.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Choose the rules for this game</h2>
+              <p className="mute" style={{ margin: '0 0 20px', fontSize: 16, lineHeight: 1.6 }}>A rules file lists the events you expect and extra log lines to flag. Edit it in any editor; the checklist updates when you save.</p>
               {!rules && <SkeletonRows rows={3} />}
               {rules?.files.map((f) => (
                 <button key={f.file} className="ropt" aria-pressed={file === f.file} onClick={() => setFile(f.file)}>
                   <span className="radio"><i /></span>
                   <span style={{ flex: '1 1 auto', minWidth: 0 }}>
                     <span className="mono" style={{ display: 'block', fontSize: 14 }}>{f.file}</span>
-                    <span style={{ display: 'block', fontSize: 13, color: f.error ? 'var(--bad)' : 'var(--mute)', marginTop: 3 }}>
+                    <span style={{ display: 'block', fontSize: 14, color: f.error ? 'var(--bad)' : 'var(--mute)', marginTop: 3 }}>
                       {f.error ? `Can't read it: ${f.error}` : `${f.expect} expected events · ${f.watch} flag rules${f.presets.length ? ` · presets: ${f.presets.join(', ')}` : ''}`}
                     </span>
                   </span>
@@ -92,12 +93,12 @@ export function ChecklistSetup() {
                   <span className="radio" style={{ borderStyle: 'dashed' }} />
                   <span>
                     <span style={{ display: 'block', fontSize: 14, fontWeight: 700 }}>Create a rules file for {pkg}</span>
-                    <span className="mute" style={{ display: 'block', fontSize: 13, marginTop: 3 }}>Starts with level_start, level_complete and the startup and remote-config checks</span>
+                    <span className="mute" style={{ display: 'block', fontSize: 14, marginTop: 3 }}>Starts with level_start, level_complete and the startup and remote-config checks</span>
                   </span>
                 </button>
               )}
               {rules?.dir && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 'auto', paddingTop: 12, fontSize: 13 }} className="dim">
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 'auto', paddingTop: 12, fontSize: 14 }} className="dim">
                   <span>Rules live in <span className="mono mute">{rules.dir}</span></span>
                   <button className="linkish" onClick={() => api('rules/reveal', { method: 'POST' })}>Open folder</button>
                 </div>
@@ -106,10 +107,10 @@ export function ChecklistSetup() {
           )}
           {step === 2 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Start the run</h2>
-              <p className="mute" style={{ margin: '0 0 18px', fontSize: 15, lineHeight: 1.6 }}>Starting clears the checklist and checks everything from now until you finish. The game keeps running.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Start the run</h2>
+              <p className="mute" style={{ margin: '0 0 18px', fontSize: 16, lineHeight: 1.6 }}>Starting clears the checklist and checks everything from now until you finish. The game keeps running.</p>
               {chosen && (
-                <div className="mute" style={{ fontSize: 14.5, lineHeight: 1.7 }}>
+                <div className="mute" style={{ fontSize: 14, lineHeight: 1.7 }}>
                   <div><span className="mono" style={{ color: 'var(--text)' }}>{chosen.file}</span></div>
                   <div>{chosen.expect} expected events, {chosen.watch} flag rules{chosen.presets.length ? `, plugin checks: ${chosen.presets.join(', ')}` : ''}</div>
                 </div>
@@ -126,13 +127,13 @@ export function ChecklistSetup() {
           )}
           {step === 3 && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Run is live</h2>
-              <p className="mute" style={{ margin: '0 0 22px', fontSize: 15, lineHeight: 1.6 }}>Play the game. Each expected event ticks off as it's logged.</p>
+              <h2 className="section-title" style={{ margin: '0 0 8px' }}>Run is live</h2>
+              <p className="mute" style={{ margin: '0 0 22px', fontSize: 16, lineHeight: 1.6 }}>Play the game. Each expected event ticks off as it's logged.</p>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', maxWidth: 540 }}>
-                <span className="mono" style={{ fontSize: 46 }}>{elapsed}</span>
+                <span className="mono" style={{ fontSize: 40 }}>{elapsed}</span>
                 <span className="mono" style={{ fontSize: 14 }}><span style={{ color: 'var(--ok)' }}>{ok}</span><span className="dim"> of {items.length} verified</span></span>
               </div>
-              <div style={{ marginTop: 14, maxWidth: 540, height: 4, borderRadius: 2, background: '#26261F', overflow: 'hidden' }}>
+              <div style={{ marginTop: 14, maxWidth: 540, height: 4, borderRadius: 2, background: 'var(--panel-2)', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: items.length ? `${(ok / items.length) * 100}%` : 0, background: 'var(--ok)', transition: 'width .8s cubic-bezier(.2,.8,.2,1)' }} />
               </div>
               <div style={{ marginTop: 'auto', paddingTop: 22 }}>
@@ -151,14 +152,16 @@ export function ChecklistSetup() {
 }
 
 export function Checklist() {
-  const { monitor, device, pkg, send, setView, lastReport, showInLogs } = useApp();
+  const { monitor, send, setView, lastReport, showInLogs } = useApp();
   const run = monitor?.run;
   const elapsed = useClock(run?.startedAt, !!run?.active);
   const report = monitor?.report ?? lastReport;
+  const gate = useGate('Checklist', !!run);
+  if (gate) return gate;
   if (!run) {
     return (
       <main className="main">
-        <PageHead title="Checklist" />
+        <PageHead tab title="Checklist" />
         <div className="card empty">No run yet. <button className="linkish" onClick={() => setView('checklist-setup')}>Set one up</button></div>
       </main>
     );
@@ -171,7 +174,7 @@ export function Checklist() {
 
   return (
     <main className="main">
-      <PageHead title="Checklist" sub={`${run.file} · ${pkg} on ${deviceName(device)}`}>
+      <PageHead tab title="Checklist" sub={run.file}>
         {run.active
           ? <>
             <LiveBars label={`Run live · ${elapsed}`} />
@@ -185,8 +188,8 @@ export function Checklist() {
       </PageHead>
 
       {report && !run.active && (
-        <div className="card rise" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '16px 20px', borderColor: '#2f6a50', background: '#17221d' }}>
-          <span className="px" style={{ fontSize: 18 }}>Report ready: {report.passed} of {report.total} passed</span>
+        <div className="card rise callout ok">
+          <span className="section-title">Report ready: {report.passed} of {report.total} passed</span>
           <span style={{ flex: '1 1 0' }} />
           <a className="btn btn-sm" href={`/api/reports/${report.id}.html?view=1`} target="_blank" rel="noreferrer">Open report</a>
           <Menu label="Save report" items={[
@@ -198,8 +201,8 @@ export function Checklist() {
 
       <div className="card" style={{ padding: '22px 24px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '8px 24px', marginBottom: 16 }}>
-          <span className="px" style={{ fontSize: 30, fontWeight: 600 }}>{counts.ok} of {items.length} verified</span>
-          <span className="mute" style={{ fontSize: 14.5 }}>{counts.problem ? <span style={{ color: 'var(--warn)' }}>{counts.problem} need a look</span> : 'nothing to fix'} · {counts.pending} waiting</span>
+          <span className="px" style={{ fontSize: 28, fontWeight: 600 }}>{counts.ok} of {items.length} verified</span>
+          <span className="mute" style={{ fontSize: 14 }}>{counts.problem ? <span style={{ color: 'var(--warn)' }}>{counts.problem} need a look</span> : 'nothing to fix'} · {counts.pending} waiting</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }} aria-hidden="true">
           {items.map((i, n) => <span key={i.id} className={`blk ${i.status}`} style={{ animationDelay: `${n * 0.05}s` }} />)}
@@ -215,14 +218,14 @@ export function Checklist() {
                   <span className={`ck ${i.status}`}>{i.status === 'ok' ? <Check /> : i.status === 'problem' ? '!' : null}</span>
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span className={i.event ? 'mono' : ''} style={{ fontSize: 15.5, fontWeight: i.event ? 500 : 700 }}>{i.event ?? i.name}</span>
+                      <span className={i.event ? 'mono' : ''} style={{ fontSize: 16, fontWeight: i.event ? 500 : 700 }}>{i.event ?? i.name}</span>
                       {i.sdk && i.type === 'event' && <span className={`tag sdk-${i.sdk === 'bytebrew' ? 'BB' : 'FA'}`}>{i.sdk === 'bytebrew' ? 'BB' : 'FA'}</span>}
                     </span>
                     <span style={{ display: 'block', fontSize: 14, marginTop: 4, color: i.status === 'problem' ? 'var(--warn)' : 'var(--mute)' }}>
                       {i.status === 'pending' ? (i.note || (i.event ? 'Waiting. Not seen yet in this run' : 'Waiting')) : i.note || (i.event ? i.name : '')}
                     </span>
                   </span>
-                  <span className="mono dim" style={{ fontSize: 12.5 }}>{i.firstTs ? clock(i.firstTs, false) : 'not yet'}</span>
+                  <span className="mono dim" style={{ fontSize: 12 }}>{i.firstTs ? clock(i.firstTs, false) : 'not yet'}</span>
                 </div>
               ))}
             </div>
@@ -240,7 +243,7 @@ export function Checklist() {
             <div key={f.id} className="flagrow">
               <span className={`tag ${SEVERITY_TAG[f.severity]}`}>{f.severity === 'critical' ? 'Error' : 'Warn'}</span>
               <span style={{ flex: '1 1 auto', minWidth: 0 }}>{f.name}</span>
-              <span className="mono dim" style={{ fontSize: 12.5 }}>x{f.count}</span>
+              <span className="mono dim" style={{ fontSize: 12 }}>x{f.count}</span>
               <button className="linkish" onClick={() => showInLogs(f.entryId)}>Line</button>
             </div>
           ))}

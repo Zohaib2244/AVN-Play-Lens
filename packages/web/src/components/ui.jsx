@@ -86,8 +86,10 @@ export function Disclosure({ id, title, hint, children, defaultOpen = false, ton
   );
 }
 
-// "More" menu: items are { label, onClick, href, download, pressed, hidden, danger }.
-export function Menu({ items, label = 'More' }) {
+// "More" menu: items are { label, onClick, href, download, pressed, hidden, danger, disabled },
+// { heading } for a small label or { sep: true } for a divider. Pass `trigger` to replace the
+// three-dot button with your own content (the header chips use this).
+export function Menu({ items, label = 'More', trigger, className = 'btn', align = 'right' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -101,16 +103,18 @@ export function Menu({ items, label = 'More' }) {
   if (!shown.length) return null;
   return (
     <span className="menu" ref={ref}>
-      <button className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} aria-label={label} title={label}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="10" width="4" height="4" rx="1" /><rect x="10" y="10" width="4" height="4" rx="1" /><rect x="17" y="10" width="4" height="4" rx="1" /></svg>
+      <button className={className} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} aria-label={trigger ? undefined : label} title={label}>
+        {trigger ?? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="10" width="4" height="4" rx="1" /><rect x="10" y="10" width="4" height="4" rx="1" /><rect x="17" y="10" width="4" height="4" rx="1" /></svg>}
       </button>
       {open && (
-        <span className="mlist" role="menu">
-          {shown.map((i) => {
+        <span className={`mlist${align === 'left' ? ' left' : ''}`} role="menu" aria-label={label}>
+          {shown.map((i, n) => {
+            if (i.sep) return <span key={`sep-${n}`} className="msep" role="separator" />;
+            if (i.heading) return <span key={`h-${n}`} className="mhead">{i.heading}</span>;
             const body = <>{i.pressed != null && <span className={`mchk${i.pressed ? ' on' : ''}`} />}{i.label}</>;
             return i.href
               ? <a key={i.label} role="menuitem" className="mitem" href={i.href} download={i.download} target={i.download ? undefined : '_blank'} rel="noreferrer" onClick={() => setOpen(false)}>{body}</a>
-              : <button key={i.label} role="menuitem" className={`mitem${i.danger ? ' danger' : ''}`} onClick={() => { setOpen(false); i.onClick?.(); }}>{body}</button>;
+              : <button key={i.key ?? i.label} role="menuitem" className={`mitem${i.danger ? ' danger' : ''}`} disabled={i.disabled} onClick={() => { setOpen(false); i.onClick?.(); }}>{body}</button>;
           })}
         </span>
       )}

@@ -28,7 +28,7 @@ export function GameEditor({ game = null, onDone }) {
   };
   return <form className="card library-form" onSubmit={save} aria-label={game ? 'Edit game' : 'Add game'}>
     <div className="library-heading"><h3 style={{ margin: 0 }}>{game ? 'Edit game' : 'Add a game'}</h3><button type="button" className="linkish" onClick={() => onDone(null)}>Cancel</button></div>
-    <div className="icon-editor"><GameIcon game={{ name: name || 'Game', icon }} /><div><label className="btn btn-sm icon-upload">Choose icon<input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} aria-label="Game icon" /></label><p className="dim" style={{ fontSize: 12.5, margin: '8px 0' }}>PNG, JPEG or WebP · up to 250 KB</p>{icon && <button type="button" className="linkish" onClick={() => setIcon(null)}>Remove icon</button>}</div></div>
+    <div className="icon-editor"><GameIcon game={{ name: name || 'Game', icon }} /><div><label className="btn btn-sm icon-upload">Choose icon<input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} aria-label="Game icon" /></label><p className="dim" style={{ fontSize: 12, margin: '8px 0' }}>PNG, JPEG or WebP · up to 250 KB</p>{icon && <button type="button" className="linkish" onClick={() => setIcon(null)}>Remove icon</button>}</div></div>
     <div className="library-fields">
       <label>Game name<input className="field" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} placeholder="My Puzzle Game" /></label>
       <label>Android package ID<input className="field mono" required maxLength={255} value={packageId} onChange={(e) => setPackageId(e.target.value)} placeholder="com.studio.game" list="installed-package-ids" autoCapitalize="none" spellCheck={false} /></label>

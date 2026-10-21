@@ -1,6 +1,5 @@
-// Small shared pieces: logo, icons, rail navigation.
-import { useApp, deviceName, viewStatus } from '../state.jsx';
-import { GameIcon } from './GameIcon.jsx';
+// Small shared pieces: logo, icons, toast, page header.
+import { useApp } from '../state.jsx';
 
 export function Logo({ size = 24 }) {
   return (
@@ -30,6 +29,10 @@ export const Icon = {
   shield: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M12 3l7.5 3v5.5c0 4.4-3 7.7-7.5 9.5-4.5-1.8-7.5-5.1-7.5-9.5V6z" /><path d="M8.7 12l2.3 2.3 4.3-4.6" /></svg>,
   flame: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M12 3c.6 3.2 5.5 5.2 5.5 10.2A5.5 5.5 0 0 1 12 18.7a5.5 5.5 0 0 1-5.5-5.5c0-2 .9-3.4 2.1-4.4.1 1.6.8 2.6 1.9 3C10.2 8.5 10.6 5.4 12 3z" /></svg>,
   clipboard: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M8.5 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5h-2" /><rect x="8.5" y="3" width="7" height="4" rx="1.2" /><path d="M9 13l2 2 4-4.2" /></svg>,
+  gamepad: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M6 8.5h12a3.5 3.5 0 0 1 3.5 3.5v2.6a3 3 0 0 1-5.3 1.9L14.6 15h-5.2l-1.6 1.5a3 3 0 0 1-5.3-1.9V12A3.5 3.5 0 0 1 6 8.5zM8 10.5v3.5M6.25 12.25h3.5M15.5 11.5h.01M17.5 13.5h.01" /></svg>,
+  history: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3.5 4v4h4M12 7.5V12l3 2" /></svg>,
+  phone: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18h3" /></svg>,
+  caret: (p) => <svg width="12" height="12" viewBox="0 0 24 24" {...stroke} strokeWidth="2.8" aria-hidden="true" {...p}><path d="M6 9l6 6 6-6" /></svg>,
   restart: (p) => <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} strokeWidth="2.4" aria-hidden="true" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>,
 };
 
@@ -42,90 +45,22 @@ export function Toast() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span className="eyebrow" style={{ color }}>{toast.severity === 'critical' ? 'Needs attention' : 'Heads up'}</span>
         <span style={{ flex: '1 1 0' }} />
-        <button onClick={() => setToast(null)} style={{ border: 0, background: 'transparent', color: 'var(--mute)', cursor: 'pointer', fontSize: 13 }}>Dismiss</button>
+        <button onClick={() => setToast(null)} style={{ border: 0, background: 'transparent', color: 'var(--mute)', cursor: 'pointer', fontSize: 14 }}>Dismiss</button>
       </div>
       <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }}>{toast.title}</div>
-      {toast.msg && <div className="mono mute" style={{ fontSize: 12.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toast.msg}</div>}
+      {toast.msg && <div className="mono mute" style={{ fontSize: 12, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toast.msg}</div>}
     </div>
   );
 }
 
-// Every view is its own place, not a step in a sequence, so each gets its own icon tile and
-// the views that look inside a game sit under their own heading.
-const GLOBAL_NAV = [
-  { id: 'home', title: 'All games', short: 'Home', icon: 'home', sub: () => ({ text: 'Your library' }) },
-  { id: 'sessions', title: 'Sessions', short: 'Sessions', icon: 'logs', sub: () => ({ text: 'All saved captures' }) },
-  { id: 'devices', title: 'Devices', short: 'Devices', icon: 'qr', sub: () => ({ text: 'Connections & pairing' }) },
-];
-const GAME_NAV = [
-  { id: 'game', title: 'Overview', short: 'Game', icon: 'home', group: 'GAME WORKSPACE', sub: () => ({ text: 'Controls & details' }) },
-  { id: 'logs', title: 'Logs', short: 'Logs', icon: 'logs', sub: (st, ctx) => ({ text: ctx.stopped ? 'Stopped' : 'Game output' }) },
-  { id: 'performance', title: 'Performance', short: 'Perf', icon: 'pulse', sub: (st) => st.performance },
-  { id: 'health', title: 'Plugin health', short: 'Health', icon: 'shield', sub: (st) => st.health },
-  { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', sub: (st) => st.firebase, also: ['firebase-setup'] },
-  { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
-  { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
-];
-
-export function Rail() {
-  const { view, setView, device, online, monitor, pkg, stopped, perfSummary, game, inGameWorkspace, viewGameSessions } = useApp();
-  const st = viewStatus(monitor, perfSummary);
+// Page header used by every inside view. Tool pages pass `tab`: the tab above already names
+// the page, so the title is kept for screen readers only and the row holds the summary and actions.
+export function PageHead({ title, sub, tab = false, children }) {
   return (
-    <aside className="rail-col">
-      <button className="wordmark" onClick={() => setView('home')} aria-label="AVN PlayLens home">
-        <Logo />
-        <span className="px wm-text">AVN PlayLens</span>
-      </button>
-      {inGameWorkspace && game && <button className="rail-game" onClick={() => setView('game')}><GameIcon game={game} size={40} paused={stopped} /><strong>{game.name}</strong></button>}
-      <nav aria-label="Views" className="rail-nav">
-        {[...GLOBAL_NAV, ...(inGameWorkspace ? GAME_NAV : [])].map((v) => {
-          const sub = v.sub(st, { stopped });
-          const active = view === v.id || v.also?.includes(view);
-          const locked = v.needsGame && !pkg;
-          const Ico = Icon[v.icon];
-          return (
-            <div key={v.id} className="nav-slot">
-              {v.group && <span className="nav-group eyebrow">{v.group}</span>}
-              <button className={`nav-item${active ? ' act' : ''}`} disabled={locked} onClick={() => v.id === 'sessions' ? viewGameSessions('__all') : setView(v.go?.(st) ?? v.id)} aria-current={active ? 'page' : undefined}>
-                <span className="nav-ico">
-                  <Ico />
-                  {!locked && sub.cls && <span className={`nav-pip ${sub.cls}`} />}
-                </span>
-                <span className="nav-text">
-                  <span className="t">{v.title}</span>
-                  <span className="t-short">{v.short}</span>
-                  <span className={`s ${locked ? '' : sub.cls ?? ''}`}>{locked ? 'Pick a game first' : sub.text}</span>
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </nav>
-      <div className="card rail-foot">
-        {device ? (
-          <>
-            <div className="rf-top">
-              <span className="dot ok pulse" />
-              <span className="rf-name">{deviceName(device)}</span>
-              <span className="tag tag-plain rf-tag">{device.transport === 'wifi' ? 'Wi-Fi' : device.transport}</span>
-            </div>
-            {online ? <div className="dim rf-sub">{inGameWorkspace ? stopped ? 'Tracking stopped' : 'Tracking this game only' : 'Tracking paused'}</div> : <div className="mono dim rf-sub">reconnecting to PlayLens…</div>}
-          </>
-        ) : (
-          <div className="dim" style={{ fontSize: 13.5 }}>{online ? 'No phone connected' : 'Starting…'}</div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-// Page header used by every inside view.
-export function PageHead({ title, sub, children }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '12px 16px' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: tab ? 'center' : 'flex-end', gap: '12px 16px', minHeight: tab ? 40 : undefined }}>
       <div style={{ flex: '1 1 auto' }}>
-        <h1 className="page-title">{title}</h1>
-        {sub && <div className="dim" style={{ fontSize: 14, marginTop: 8 }}>{sub}</div>}
+        <h1 className={tab ? 'sr-only' : 'page-title'}>{title}</h1>
+        {sub && <div className="dim" style={{ fontSize: 14, marginTop: tab ? 0 : 8 }}>{sub}</div>}
       </div>
       {children}
     </div>

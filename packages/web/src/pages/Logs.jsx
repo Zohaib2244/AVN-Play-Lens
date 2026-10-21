@@ -4,8 +4,8 @@ import { useApp, deviceName, clock } from '../state.jsx';
 import { api } from '../api.js';
 import { Icon, PageHead } from '../components/bits.jsx';
 import { Grouped } from '../components/Grouped.jsx';
-import { GamePicker } from '../components/GamePicker.jsx';
-import { ActionButton, LiveBars, Menu, SkeletonLog } from '../components/ui.jsx';
+import { LiveBars, Menu, SkeletonLog } from '../components/ui.jsx';
+import { useGate } from '../components/Header.jsx';
 
 const LEVEL_WORD = { W: 'WARN', E: 'ERROR', F: 'FATAL' };
 
@@ -39,14 +39,14 @@ function Detail({ e }) {
   const copy = () => navigator.clipboard?.writeText([`${clock(e.ts)} ${e.level} ${e.tag}: ${e.message}`, ...(e.more || [])].join('\n'));
   return (
     <div className="detail">
-      <div style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 12, wordBreak: 'break-word' }} className="mono">{cleanMessage(e)}</div>
+      <div style={{ fontSize: 16, lineHeight: 1.5, marginBottom: 12, wordBreak: 'break-word' }} className="mono">{cleanMessage(e)}</div>
       {e.more && <pre className="trace">{e.more.join('\n')}</pre>}
       {params && Object.keys(params).length > 0 && (
         <div style={{ marginBottom: 8 }}>
           {Object.entries(params).map(([k, v]) => <span key={k} className="chip"><span className="dim">{k}</span>{String(v)}</span>)}
         </div>
       )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: 13, marginBottom: 12 }} className="dim">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: 14, marginBottom: 12 }} className="dim">
         {facts.map(([k, v]) => <span key={k}>{k}: <span className="mute mono">{v}</span></span>)}
       </div>
       <button className="btn btn-sm" onClick={copy}>Copy</button>
@@ -61,7 +61,7 @@ export function useAppAction() {
 }
 
 export function Logs() {
-  const { device, pkg, lines, version, stream, rate, alerts, setAlerts, sessionId, focusEntry, setFocusEntry, stopped, setStopped, monitor } = useApp();
+  const { device, lines, version, stream, rate, alerts, setAlerts, sessionId, focusEntry, setFocusEntry, stopped } = useApp();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [mode, setMode] = useState(() => { try { return localStorage.getItem('playlens.logMode') || 'lines'; } catch { return 'lines'; } });
@@ -72,7 +72,6 @@ export function Logs() {
   const [follow, setFollow] = useState(true);
   const [lastId, setLastId] = useState(0);
   const scrollRef = useRef(null);
-  const appAction = useAppAction();
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -115,12 +114,6 @@ export function Logs() {
     setPaused((p) => !p);
   }, [lines]);
 
-  const toggleStopped = () => {
-    if (!stopped && monitor?.run?.active && !window.confirm('A checklist run is live. Stopping the log ends it. Stop anyway?')) return;
-    setPaused(false);
-    setStopped(!stopped);
-  };
-
   // Space pauses / resumes, unless you're typing or on a button outside the log.
   useEffect(() => {
     const onKey = (e) => {
@@ -141,41 +134,22 @@ export function Logs() {
     if (el) setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 60);
   }, []);
 
-  if (!device) {
-    return (
-      <main className="main">
-        <h1 className="page-title">Logs</h1>
-        <div className="card empty">Connect a phone first. Logs start as soon as one is ready.</div>
-      </main>
-    );
-  }
+  const gate = useGate('Logs', lines.current.length > 0);
+  if (gate) return gate;
 
   const newCount = shown.length ? shown.filter((e) => e.id > lastId).length : 0;
   return (
     <main className="main">
-      <PageHead
-        title="Logs"
-        sub={<>{pkg ? `${pkg} on ${deviceName(device)}` : `Everything on ${deviceName(device)}`} · {shown.length.toLocaleString()} lines
-          {pkg && !device.replay && <> · <span style={{ color: stream.running ? 'var(--ok)' : 'var(--dim)' }}>{stream.running ? 'game running' : 'game not running'}</span></>}</>}
-      >
-        {stopped ? <span className="live paused">Stopped</span> : <LiveBars label={paused ? 'Paused' : rate ? `Live · ${rate}/s` : 'Live'} paused={paused} />}
-        {stopped
-          ? <button className="btn btn-warm" onClick={toggleStopped}><Icon.play /> Start log</button>
-          : (
-            <button className="btn" aria-pressed={paused} onClick={togglePause} title="Freeze the view; lines are still collected (Space)">
-              {paused ? <><Icon.play /> Resume</> : <><Icon.pause /> Pause</>}
-            </button>
-          )}
-        {pkg && !device.replay && (
-          <ActionButton onClick={() => appAction(stream.running ? 'restart' : 'launch')} busyLabel={stream.running ? 'Restarting…' : 'Launching…'}>
-            <Icon.restart /> {stream.running ? 'Restart game' : 'Launch game'}
-          </ActionButton>
+      <PageHead tab title="Logs" sub={`${shown.length.toLocaleString()} lines`}>
+        {!stopped && <LiveBars label={paused ? 'Paused' : rate ? `Live · ${rate}/s` : 'Live'} paused={paused} />}
+        {!stopped && (
+          <button className="btn" aria-pressed={paused} onClick={togglePause} title="Freeze the view; lines are still collected (Space)">
+            {paused ? <><Icon.play /> Resume</> : <><Icon.pause /> Pause</>}
+          </button>
         )}
         <Menu items={[
-          { label: 'Stop the game', onClick: () => appAction('stop'), hidden: !pkg || device.replay || !stream.running },
           { label: 'Save this log (.txt)', href: sessionId ? `/api/sessions/${sessionId}.txt` : null, download: true, hidden: !sessionId },
-          { label: 'Pop-up alerts for crashes and errors', pressed: alerts, onClick: () => setAlerts(!alerts) },
-          { label: 'Stop collecting logs', onClick: toggleStopped, hidden: stopped },
+          { label: 'Pop-up alerts for crashes', pressed: alerts, onClick: () => setAlerts(!alerts) },
         ]} />
       </PageHead>
 
@@ -184,26 +158,21 @@ export function Logs() {
           <Icon.search />
           <input className="qin" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the logs" aria-label="Search the logs" />
         </div>
-        <div className="seg" role="group" aria-label="View">
-          {[['lines', 'Lines'], ['grouped', 'Grouped']].map(([k, label]) => (
-            <button key={k} aria-pressed={mode === k} onClick={() => pickMode(k)}>{label}</button>
-          ))}
-        </div>
         <div className="seg" role="group" aria-label="Show">
-          {(mode === 'grouped' ? [['all', 'Warnings + errors'], ['err', 'Errors']] : [['all', 'All'], ['warn', 'Warnings'], ['err', 'Errors']]).map(([k, label]) => (
-            <button key={k} aria-pressed={filter === k} onClick={() => setFilter(k)}>{label}</button>
+          {[['all', 'All'], ['warn', 'Warnings'], ['err', 'Errors']].map(([k, label]) => (
+            <button key={k} aria-pressed={mode === 'grouped' && filter === 'all' ? k === 'warn' : filter === k} disabled={mode === 'grouped' && k === 'all'} title={mode === 'grouped' && k === 'all' ? 'Grouping only covers warnings and errors' : undefined} onClick={() => setFilter(k)}>{label}</button>
           ))}
         </div>
-        <GamePicker />
+        <button className="btn" aria-pressed={mode === 'grouped'} onClick={() => pickMode(mode === 'grouped' ? 'lines' : 'grouped')} title="Merge repeated warnings and errors">Group repeats</button>
       </div>
 
-      {mode === 'grouped' ? <Grouped q={q} filter={filter === 'warn' ? 'all' : filter} onShow={(id) => { pickMode('lines'); setPaused(false); setFocusEntry(id); }} /> : (<>
+      {mode === 'grouped' ? <Grouped q={q} filter={filter === 'err' ? 'err' : 'all'} onShow={(id) => { pickMode('lines'); setPaused(false); setFocusEntry(id); }} /> : (<>
       <div className="card logcard">
         <div className="loghead eyebrow"><span>Time</span><span>Level</span><span>Message</span><span style={{ textAlign: 'right' }}>From</span></div>
         <div className="logscroll" ref={scrollRef} onScroll={onScroll} role="log" aria-live="off">
           {shown.length === 0 ? (
             !stopped && !q && filter === 'all' && stream.state !== 'ended' && !lines.current.length ? <SkeletonLog /> :
-            <div className="empty">{stopped ? 'The log is stopped. Press Start log to begin a fresh one.' : stream.state === 'ended' ? `The log stopped: ${stream.reason}` : q || filter !== 'all' ? 'Nothing matches the filter yet.' : 'Waiting for the first lines…'}</div>
+            <div className="empty">{stopped ? 'Tracking is stopped. Start the game from the top bar to collect again.' : stream.state === 'ended' ? `The log stopped: ${stream.reason}` : q || filter !== 'all' ? 'Nothing matches the filter yet.' : 'Waiting for the first lines…'}</div>
           ) : (
             <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
               {virt.getVirtualItems().map((vi) => {
@@ -212,7 +181,7 @@ export function Logs() {
                 return (
                   <div key={vi.key} data-index={vi.index} ref={virt.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start}px)` }}>
                     <button className={`row r-${e.level}${isOpen ? ' open' : ''}${e.id > lastId && !paused ? ' new' : ''}`} onClick={() => setOpen(isOpen ? null : e.id)} aria-expanded={isOpen}>
-                      <span className="mono dim" style={{ fontSize: 12.5 }}>{clock(e.ts)}</span>
+                      <span className="mono dim" style={{ fontSize: 12 }}>{clock(e.ts)}</span>
                       <span className={`lv lv-${e.level}`}>{LEVEL_WORD[e.level] || ''}</span>
                       <span className="cell-msg">{cleanMessage(e)}{e.more ? <span className="dim">  +{e.more.length} lines</span> : null}</span>
                       <span className="cell-from">{fromLabel(e)}</span>
@@ -226,17 +195,17 @@ export function Logs() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 20px', fontSize: 13.5 }} className="mute">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 20px', fontSize: 14 }} className="mute">
         {stopped
-          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span className="dot" style={{ background: 'var(--dim)' }} />Log stopped. Nothing is being collected. Start log begins a fresh one</span>
+          ? null
           : paused
           ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--warm-text)' }}><span className="dot" style={{ background: 'var(--warm-text)' }} />Paused. New lines are still being collected</span>
           : follow
             ? null
             : <button className="btn btn-sm" onClick={() => { setFollow(true); virt.scrollToIndex(shown.length - 1, { align: 'end' }); }}>↓ Jump to newest{newCount ? ` (${newCount} new)` : ''}</button>}
-        {device.replay && <span className="tag tag-plain">Replay: saved demo log, not a live phone</span>}
+        {device?.replay && <span className="tag tag-plain">Replay: saved demo log, not a live phone</span>}
         <span style={{ flex: '1 1 0' }} />
-        <span className="dim">Click a line to see more{!stopped && <> · <kbd>Space</kbd> pauses</>}</span>
+        {!stopped && <span className="dim"><kbd>Space</kbd> pauses</span>}
       </div>
       </>)}
     </main>

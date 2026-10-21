@@ -6,7 +6,7 @@ import { cleanMessage } from '../pages/Logs.jsx';
 
 const OWNERS = [
   { id: 'game', title: 'Your game', note: 'Logged by the game\'s own code.' },
-  { id: 'avn', title: 'AVN plugin', note: 'Plugin warnings and errors. Plugin health explains most of them.' },
+  { id: 'avn', title: 'AVN plugin', note: 'Plugin warnings and errors. The Health tab explains most of them.' },
   { id: 'sdk', title: 'Other SDKs and plugins', note: 'Ad networks, Firebase, billing and other libraries.' },
   { id: 'android', title: 'Android and the phone', note: 'Lines from Android itself, the GPU driver or the runtime. Usually safe to ignore.' },
 ];
@@ -41,11 +41,11 @@ export function Grouped({ q, filter, onShow }) {
             <div className="ghead">
               <span className={`odot o-${s.id}`} />
               <span style={{ fontWeight: 700, fontSize: 16 }}>{s.title}</span>
-              <span className="mono dim" style={{ fontSize: 12.5 }}>{s.items.length} kind{s.items.length === 1 ? '' : 's'} · {s.total.toLocaleString()} line{s.total === 1 ? '' : 's'}</span>
+              <span className="mono dim" style={{ fontSize: 12 }}>{s.items.length} kind{s.items.length === 1 ? '' : 's'} · {s.total.toLocaleString()} line{s.total === 1 ? '' : 's'}</span>
               <span style={{ flex: '1 1 auto' }} />
               {s.id === 'android' && <button className="btn btn-sm" aria-pressed={showSafe} onClick={() => setShowSafe(!showSafe)}>{showSafe ? 'Hide' : 'Show'}</button>}
             </div>
-            <div className="dim" style={{ fontSize: 13, padding: '0 20px 10px' }}>{s.note}</div>
+            <div className="dim" style={{ fontSize: 14, padding: '0 20px 10px' }}>{s.note}</div>
             {!quiet && s.items.map((g) => {
               const isOpen = open === g.key;
               return (
@@ -61,7 +61,7 @@ export function Grouped({ q, filter, onShow }) {
                   </button>
                   {isOpen && (
                     <div className="detail" style={{ paddingLeft: 20 }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 24px', fontSize: 13.5, marginBottom: 10 }} className="mute">
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 24px', fontSize: 14, marginBottom: 10 }} className="mute">
                         <span>Tag <span className="mono">{g.tag}</span></span>
                         {g.sdk && <span>From <b>{g.sdk}</b></span>}
                         <span>First <span className="mono">{clock(g.first, false)}</span></span>
@@ -75,7 +75,7 @@ export function Grouped({ q, filter, onShow }) {
                 </div>
               );
             })}
-            {quiet && <div className="dim" style={{ fontSize: 13.5, padding: '4px 20px 16px' }}>Hidden. Press Show to list them.</div>}
+            {quiet && <div className="dim" style={{ fontSize: 14, padding: '4px 20px 16px' }}>Hidden. Press Show to list them.</div>}
           </section>
         );
       })}

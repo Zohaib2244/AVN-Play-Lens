@@ -2,13 +2,13 @@
 // graph below), one graph, and everything else tucked into "More details" and
 // "Phone and game build". Sampled by the server once a second.
 import { useMemo, useState } from 'react';
-import { useApp, deviceName } from '../state.jsx';
+import { useApp } from '../state.jsx';
 import { PageHead, Lattice } from '../components/bits.jsx';
 import { Chart } from '../components/Chart.jsx';
 import { useProfile, DeviceRows, AppRows, targetNote } from '../components/DeviceProfile.jsx';
 import { ActionButton, Disclosure, LiveBars, Skeleton, SkeletonRows } from '../components/ui.jsx';
-import { GamePicker } from '../components/GamePicker.jsx';
 import { useAppAction } from './Logs.jsx';
+import { useGate } from '../components/Header.jsx';
 
 const THERMAL = ['None', 'Light', 'Moderate', 'Severe', 'Critical', 'Emergency', 'Shutdown'];
 const WINDOWS = [['120', '2 min'], ['600', '10 min'], ['all', 'Session']];
@@ -31,7 +31,7 @@ function Tile({ id, label, value, unit, sub, tone, picked, onPick, loading }) {
         ? <><Skeleton w="55%" h={34} r={8} /><Skeleton w="75%" h={11} /></>
         : <>
           <span className="pval"><span className="px">{value}</span>{unit && <span className="punit">{unit}</span>}</span>
-          <span className="dim" style={{ fontSize: 12.5 }}>{sub}</span>
+          <span className="dim" style={{ fontSize: 12 }}>{sub}</span>
         </>}
     </button>
   );
@@ -61,17 +61,8 @@ export function Performance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfVersion, win]);
 
-  if (!device || !pkg) {
-    return (
-      <main className="main">
-        <PageHead title="Performance" />
-        <div className="card empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <span>Pick a game first. Performance is measured for one game at a time.</span>
-          {device && <GamePicker />}
-        </div>
-      </main>
-    );
-  }
+  const gate = useGate('Performance', all.length > 0);
+  if (gate) return gate;
 
   const info = s?.info ?? {};
   const last = all.at(-1) ?? {};
@@ -100,7 +91,7 @@ export function Performance() {
 
   return (
     <main className="main" style={{ gap: 20 }}>
-      <PageHead title="Performance" sub={`${pkg} on ${deviceName(device)}${dur ? ` · ${dur} measured` : ''}`}>
+      <PageHead tab title="Performance" sub={dur ? `${dur} measured` : null}>
         {waitingGame ? <span className="live paused">Waiting for the game</span> : <LiveBars label="Sampling every second" />}
       </PageHead>
 
@@ -113,10 +104,10 @@ export function Performance() {
       )}
 
       {failed && (
-        <div className="card" style={{ padding: '18px 22px', borderColor: '#6b2e27', background: '#2a1916' }}>
+        <div className="card callout bad" style={{ display: 'block' }}>
           <b style={{ color: 'var(--bad)' }}>Couldn't read performance from the phone.</b>
-          <span className="mono mute" style={{ display: 'block', fontSize: 13, marginTop: 6, overflowWrap: 'anywhere' }}>{info.error}</span>
-          <span className="dim" style={{ display: 'block', fontSize: 13.5, marginTop: 6 }}>Check the phone is still connected. PlayLens keeps trying every second.</span>
+          <span className="mono mute" style={{ display: 'block', fontSize: 14, marginTop: 6, overflowWrap: 'anywhere' }}>{info.error}</span>
+          <span className="dim" style={{ display: 'block', fontSize: 14, marginTop: 6 }}>Check the phone is still connected. PlayLens keeps trying every second.</span>
         </div>
       )}
 
@@ -152,9 +143,9 @@ export function Performance() {
             {!s?.frames ? <SkeletonRows rows={5} /> : (
               <>
                 <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <span><span className="eyebrow">Median</span><br /><span className="px" style={{ fontSize: 22 }}>{r1(s.medianFps)}</span> <span className="dim">fps</span></span>
-                  <span><span className="eyebrow">Stable</span><br /><span className="px" style={{ fontSize: 22 }}>{pct(s.stability)}</span></span>
-                  <span><span className="eyebrow">Longest</span><br /><span className="px" style={{ fontSize: 22 }}>{r0(s.longestFrame)}</span> <span className="dim">ms</span></span>
+                  <span><span className="eyebrow">Median</span><br /><span className="px" style={{ fontSize: 20 }}>{r1(s.medianFps)}</span> <span className="dim">fps</span></span>
+                  <span><span className="eyebrow">Stable</span><br /><span className="px" style={{ fontSize: 20 }}>{pct(s.stability)}</span></span>
+                  <span><span className="eyebrow">Longest</span><br /><span className="px" style={{ fontSize: 20 }}>{r0(s.longestFrame)}</span> <span className="dim">ms</span></span>
                 </div>
                 {['≤ 25 ms (smooth)', '26–33 ms', '34–50 ms', '51–100 ms', '> 100 ms (freeze)'].map((label, i) => (
                   <div key={label} className="fbar">
@@ -191,7 +182,7 @@ export function Performance() {
             ['Thermal throttling', s?.thermalMax != null ? `highest: ${THERMAL[s.thermalMax] ?? s.thermalMax}` : '—'],
           ].map(([k, v]) => <div key={k} className="kv"><span className="mute">{k}</span><span className="mono" style={{ textAlign: 'right' }}>{v}</span></div>)}
         </section>
-        <div className="dim" style={{ fontSize: 13, lineHeight: 1.6 }}>
+        <div className="dim" style={{ fontSize: 14, lineHeight: 1.6 }}>
           FPS and frame times come from the frames Android actually showed for the game (SurfaceFlinger). CPU is the game's process time, where 100% is one core.
           Memory is PSS from <span className="mono">dumpsys meminfo</span>, including graphics. Temperature is the battery sensor. {device.replay && 'Replay device: these numbers are made up for the demo.'}
         </div>
@@ -211,7 +202,7 @@ export function Performance() {
           <section className="card" style={{ flex: '1 1 340px', minWidth: 0, padding: '16px 22px 10px' }}>
             <div className="eyebrow" style={{ marginBottom: 6 }}>Game build</div>
             {app ? <AppRows a={app} engine={engine} /> : <SkeletonRows rows={6} />}
-            {tnote && <div style={{ color: 'var(--warn)', fontSize: 13.5, padding: '10px 0 4px' }}>{tnote}</div>}
+            {tnote && <div style={{ color: 'var(--warn)', fontSize: 14, padding: '10px 0 4px' }}>{tnote}</div>}
           </section>
         </div>
       </Disclosure>

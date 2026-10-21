@@ -18,6 +18,8 @@ import { readReport } from '../monitor/report.mjs';
 import { BuildReportStore } from '../monitor/build-report.mjs';
 import { SessionRecorder, listSessions, sessionText, sessionDetails, deleteSession } from '../session/recorder.mjs';
 import { spawn } from 'node:child_process';
+import { SnapshotStore, LevelSnapshooter, levelNumber } from '../snapshots/snapshots.mjs';
+import { Health } from '../monitor/health.mjs';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
 const ADDRESS_RE = /^[\w.-]+:\d{2,5}$/;
@@ -46,6 +48,10 @@ export function createServer(ctx) {
   const games = ctx.games ?? new GameLibrary();
   const buildReports = ctx.buildReports ?? new BuildReportStore();
   const inventory = ctx.adb ? new GameInventory(ctx.adb) : null;
+  const snapshots = ctx.snapshots ?? new SnapshotStore();
+  const snapshooter = new LevelSnapshooter({ adb: ctx.adb, store: snapshots,
+    connected: (serial) => ctx.devices().some((d) => d.serial === serial && d.state === 'device') });
+
   const readJson = (req, limit = 512 * 1024) => new Promise((resolve, reject) => {
     let data = ''; let bytes = 0;
     req.on('data', (c) => { bytes += c.length; if (bytes <= limit) data += c; });
@@ -63,6 +69,30 @@ export function createServer(ctx) {
 
     if (req.method === 'GET' && area === 'status') return send(res, 200, ctx.status());
     if (req.method === 'GET' && area === 'devices' && !id) return send(res, 200, ctx.devices());
+
+    if (area === 'snapshots' && id) {
+      if (!PACKAGE_RE.test(id) || id.length > 255) return send(res, 400, { error: 'Invalid game package' });
+      if (req.method === 'GET' && !sub) return send(res, 200, { snapshots: snapshots.list(id), capture: snapshooter.status(id) });
+      if (req.method === 'GET' && sub === 'download.zip') {
+        const selection = url.searchParams.get('levels');
+        const levels = selection == null ? null : [...new Set(selection.split(',').map(levelNumber))].sort((a, b) => a - b);
+        return download(res, snapshots.zip(id, levels), 'application/zip', `${id}-levels.zip`);
+      }
+      if (req.method === 'GET' && sub?.endsWith('.png')) {
+        const level = levelNumber(sub.slice(0, -4));
+        const png = snapshots.read(id, level);
+        if (url.searchParams.has('download')) return download(res, png, 'image/png', `${level}.png`);
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        return res.end(png);
+      }
+      if (req.method === 'POST' && ['settings', 'capture'].includes(sub)) {
+        if (!games.list().some((g) => g.packageId === id)) return send(res, 403, { error: 'Add this game to your library first' });
+        const body = await readJson(req);
+        if (sub === 'settings') return send(res, 200, { capture: snapshooter.configure(id, body) });
+        const snapshot = await snapshooter.capture(id, body.serial, body.level);
+        return send(res, 201, { snapshot });
+      }
+    }
 
     if (area === 'build-reports') {
       if (req.method === 'GET' && id?.endsWith('.pdf')) {
@@ -297,6 +327,17 @@ export function createServer(ctx) {
     let capturePaused = false;
     let capturePackage = null;
     let captureSerial = null;
+    let watchingSnapshots = false;
+    const pauseSnapshots = () => {
+      if (watchingSnapshots) snapshooter.unwatch(capturePackage, captureSerial, ws);
+      watchingSnapshots = false;
+    };
+    const resumeSnapshots = () => {
+      if (!watchingSnapshots && !isReplay(captureSerial)) {
+        snapshooter.watch(capturePackage, captureSerial, ws);
+        watchingSnapshots = true;
+      }
+    };
     const out = (msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
     out({ type: 'hello', status: ctx.status(), devices: ctx.devices(), pair: ctx.pairing?.state() ?? { state: 'idle' } });
 
@@ -306,6 +347,7 @@ export function createServer(ctx) {
     });
     const stopStream = async ({ save = true } = {}) => {
       ending = true;
+      pauseSnapshots();
       clearInterval(ticker);
       sampler?.stop();
       stream?.stop();   // flushes the last grouped line first, then the session file can close
@@ -359,11 +401,13 @@ export function createServer(ctx) {
         ending = false;
         capturePackage = pkg;
         captureSerial = msg.serial;
+        resumeSnapshots();
         const streamId = msg.streamId;
         currentStreamId = streamId;
         let m = ctx.rules ? new Monitor({ rules: ctx.rules, pkg, deviceName: deviceName(msg.serial) }) : null;
         let rec = ctx.record === false ? null : new SessionRecorder({ serial: msg.serial, deviceName: deviceName(msg.serial), pkg, replay: isReplay(msg.serial), game: games.list().find((g) => g.packageId === pkg) });
         monitor = m;
+        const levelDetector = m ? null : new Health(null);
         recorder = rec;
         lastCaptureId = rec?.id ?? null;
         if (m) {
@@ -382,6 +426,8 @@ export function createServer(ctx) {
           const pid = e.tag === 'ActivityManager' && process?.[2] === pkg ? Number(process[1]) : null;
           // A new main game process starts a distinct capture, including Firebase.
           if (!ending && pid && m && stream.counts.total > 1 && pid !== m.processPid) {
+            pauseSnapshots();
+            resumeSnapshots();
             const old = rec;
             old?.finish(m.summary(), captureOptions()).catch((err) => out({ type: 'error', message: err.message }));
             liveMonitors.delete(m);
@@ -406,10 +452,15 @@ export function createServer(ctx) {
             out({ type: 'session', streamId, id: rec?.id ?? null, pkg, serial: msg.serial, name: 'Live session', startedAt: Date.now(), recording: !!rec, ...rec?.details(), reset: true, reason: 'Game restarted' });
           } else if (pid && m) m.processPid = pid;
           m?.ingest(e);
+          levelDetector?.ingestLevel(e);
+          if (!ending && !capturePaused && !isReplay(msg.serial)) snapshooter.observe(pkg, msg.serial, (m?.health ?? levelDetector)?.levels.at(-1)?.level);
           rec?.write(e);
         } });
         stream.on('batch', (entries) => out({ type: 'log.batch', streamId, entries, rate: stream?.rate() ?? 0 }));
-        stream.on('state', (st) => out({ type: 'stream.state', streamId, ...st }));
+        stream.on('state', (st) => {
+          if (st.state === 'ended' || st.state === 'error') pauseSnapshots();
+          out({ type: 'stream.state', streamId, ...st });
+        });
         await stream.start();
         let tick = 0;
         let lastInfo = '';
@@ -440,6 +491,7 @@ export function createServer(ctx) {
       } else if (msg.type === 'stream.pause') {
         if (stream && !capturePaused && msg.streamId === currentStreamId) {
           capturePaused = true;
+          pauseSnapshots();
           clearInterval(ticker);
           sampler?.stop();
           stream.pause();
@@ -454,6 +506,7 @@ export function createServer(ctx) {
         if (stream && capturePaused && msg.streamId === currentStreamId) {
           if (!games.list().some((g) => g.packageId === capturePackage)) return stopStream();
           capturePaused = false;
+          resumeSnapshots();
           if (recorder) recorder.paused = false;
           if (monitor) liveMonitors.add(monitor);
           await resumeCapture?.();
@@ -503,6 +556,7 @@ export function createServer(ctx) {
     close: async () => {
       for (const ws of clients) ws.terminate();
       wss.close();
+      await snapshooter.close();
       await new Promise((resolve) => server.close(resolve));
       await Promise.allSettled([...pendingCloses]);
     },

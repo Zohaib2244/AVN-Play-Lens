@@ -11,9 +11,9 @@ export class Adb {
     return serial ? ['-s', serial, ...args] : args;
   }
 
-  run(args, { serial, timeout = 15000 } = {}) {
+  run(args, { serial, timeout = 15000, encoding = 'utf8' } = {}) {
     return new Promise((resolve, reject) => {
-      execFile(this.bin, this.args(args, serial), { timeout, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+      execFile(this.bin, this.args(args, serial), { timeout, encoding, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
         if (err) {
           err.stdout = stdout;
           err.stderr = stderr;

@@ -8,6 +8,7 @@ A local web console for testing Unity Android builds. It runs on your Mac or PC 
 - **Performance:** FPS and frame times (from SurfaceFlinger), CPU, GPU (where the phone allows it), memory, temperature and throttling, sampled every second with graphs of the session. Plus the phone's and the game build's details.
 - **Plugin health:** the launch timeline in ms, the AVN plugin's startup sequence, SDKs it verifies plus other SDKs found in the APK and logs, MAX adapters, ad funnels from load to paid, ad rules checked against the AdConfig values, consent and privacy, remote config with the actual values, and what needs a look.
 - **Firebase events:** turns on Firebase debug mode for you, then shows every event Firebase logs with its values. The plugin's lines double-check that nothing was sent but not recorded.
+- **Level Snapshooter:** capture each new detected level while playing, browse a per-game screenshot gallery, retake individual levels and download all or selected images as a ZIP. PNGs are named by level number (`1.png`, `2.png`) and saved on the computer running PlayLens, with no screenshot files written to the phone.
 - **Checklist:** attach the plugin’s publishing PDF, match its package/version/build to the installed app, and verify its For Dev items with fresh runtime evidence. Original build results stay in their own column. Expected events and parameters are checked from the game’s rules file. Export HTML / Markdown, or open the report and print/save as PDF.
 
 ## Get it
@@ -96,6 +97,14 @@ Tracking starts only inside an installed, registered game's workspace. Home, Dev
 PlayLens rejects device-wide and unregistered-game captures. It accepts only log lines from the selected game's processes, plus system crash/launch diagnostics naming that exact package. Firebase lines from unknown/shared service PIDs are excluded, so other apps' events cannot enter the selected game's counts.
 
 Connected devices are summarized in Home's header. **Devices** contains pairing, connection controls and the option to connect another phone. When no phone is connected, Home shows a connect prompt.
+
+## Level Snapshooter
+
+Open a game workspace and choose **Level Snapshooter**. Bring the game to the foreground on a connected phone, choose a capture delay (default 1 second), and click **Start auto capture**. As you play, PlayLens captures each newly detected level once. Existing images are kept; enter a level number and use **Capture now / Retake** to replace one. Automatic capture stays armed while switching between that game's views, pauses when tracking pauses or you leave the workspace, and must be started again after restarting the server. Replay logs cannot produce screenshots.
+
+Level numbers use the existing game rules `level` setting, or Firebase parameters such as `level` and `level_number`. Enable Firebase debug mode from Firebase events if needed. For custom event parameters use `level: { event: LEVEL_ANALYSIS, param: Started }`; for Unity logs use a single-quoted pattern such as `level: { log: 'Level (\d+) loaded' }` in the game's rules file. Use a level-start event so the screenshot belongs to the newly opened level. You can also capture manually without level logs.
+
+Images persist independently of sessions in `~/.avn-playlens/snapshots/<package>/`, remain browsable without a connected phone, and survive server restarts. The gallery supports numeric ordering, level search, full-size previews, individual PNG downloads, and ZIP downloads for all or selected levels (up to 256 MB per export). Screenshots stream directly from ADB to the computer; nothing is saved to Android's gallery or storage.
 
 ## Sessions and history
 

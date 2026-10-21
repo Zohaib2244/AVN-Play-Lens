@@ -15,6 +15,7 @@ export function Logo({ size = 24 }) {
 
 const stroke = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' };
 export const Icon = {
+  camera: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2" aria-hidden="true" {...p}><path d="M4 7h4l2-3h4l2 3h4a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" /><circle cx="12" cy="13" r="4" /></svg>,
   qr: (p) => <svg width="16" height="16" viewBox="0 0 24 24" {...stroke} strokeWidth="2.2" aria-hidden="true" {...p}><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v6h-4M14 18v2" /></svg>,
   arrow: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2.2" aria-hidden="true" {...p}><path d="M5 12h14M13 6l6 6-6 6" /></svg>,
   back: (p) => <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} strokeWidth="2.4" aria-hidden="true" {...p}><path d="M15 6l-6 6 6 6" /></svg>,
@@ -65,6 +66,7 @@ const GAME_NAV = [
   { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', sub: (st) => st.firebase, also: ['firebase-setup'] },
   { id: 'remote-config', title: 'Remote Config', short: 'Config', icon: 'clipboard', sub: () => ({ text: 'Fetched values' }) },
   { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
+  { id: 'snapshooter', title: 'Level Snapshooter', short: 'Levels', icon: 'camera', sub: () => ({ text: 'Screenshots & ZIP export' }) },
   { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
 ];
 

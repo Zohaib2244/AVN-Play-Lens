@@ -21,9 +21,10 @@ import { Checklist, ChecklistSetup } from './pages/Checklist.jsx';
 import { SessionControls } from './components/SessionControls.jsx';
 import { Sessions, SavedSession } from './pages/Sessions.jsx';
 import { Performance } from './pages/Performance.jsx';
+import { Snapshooter } from './pages/Snapshooter.jsx';
 import { RemoteConfig } from './pages/RemoteConfig.jsx';
 
-const PAGES = { game: Game, 'game-sessions': GameSessions, devices: Devices, games: Games, sessions: Sessions, 'saved-session': SavedSession, logs: Logs, performance: Performance, health: Health, firebase: Firebase, 'firebase-setup': FirebaseSetup, 'remote-config': RemoteConfig, checklist: Checklist, 'checklist-setup': ChecklistSetup };
+const PAGES = { snapshooter: Snapshooter, game: Game, 'game-sessions': GameSessions, devices: Devices, games: Games, sessions: Sessions, 'saved-session': SavedSession, logs: Logs, performance: Performance, health: Health, firebase: Firebase, 'firebase-setup': FirebaseSetup, 'remote-config': RemoteConfig, checklist: Checklist, 'checklist-setup': ChecklistSetup };
 
 function App() {
   const { view, captureVersion, archivedId, serial, pkg, inGameWorkspace } = useApp();
@@ -35,7 +36,7 @@ function App() {
       <Rail />
       <div className="session-page">
         {inGameWorkspace && view !== 'saved-session' && <SessionControls key={`controls-${captureVersion}`} />}
-        <Page key={view === 'saved-session' ? `saved-${archivedId}` : view === 'game' ? `game-${pkg}` : view === 'devices' ? 'devices' : view === 'games' ? 'games' : view === 'sessions' ? 'history' : view.endsWith('-setup') ? `setup-${view}-${serial}-${pkg}` : `page-${view}-${captureVersion}`} />
+        <Page key={view === 'saved-session' ? `saved-${archivedId}` : view === 'snapshooter' ? `snapshots-${pkg}` : view === 'game' ? `game-${pkg}` : view === 'devices' ? 'devices' : view === 'games' ? 'games' : view === 'sessions' ? 'history' : view.endsWith('-setup') ? `setup-${view}-${serial}-${pkg}` : `page-${view}-${captureVersion}`} />
       </div>
       <Toast />
     </div>

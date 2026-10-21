@@ -18,10 +18,24 @@ export class FirebaseEvents {
     this.plugin = [];
     this.pluginProblems = [];
     this.byteBrew = [];
+    this.diagnostics = { lines: 0, lastTs: null, collection: null, serviceConnected: false, dispatches: 0, issue: null };
     this.nextId = 1;
   }
 
   ingest(e) {
+    if (e.source === 'firebase') {
+      const d = this.diagnostics;
+      d.lines++;
+      d.lastTs = e.ts;
+      if (/App measurement collection enabled|App measurement enabled for app package/.test(e.message)) d.collection = true;
+      if (/App measurement collection disabled|App measurement disabled|analytics storage consent denied/i.test(e.message)) d.collection = false;
+      if (/^Connected to remote service/.test(e.message)) d.serviceConnected = true;
+      if (/^Logging telemetry for logEvent from database/.test(e.message)) d.dispatches++;
+      if (/Network upload failed|net::ERR_|Missing google_app_id|collection disabled/i.test(e.message)) {
+        d.issue = e.message;
+        d.entryId = e.id;
+      }
+    }
     if (e.fa) {
       const f = e.fa;
       // FA and FA-SVC can both log the same event; keep one (the one with more detail).
@@ -37,6 +51,10 @@ export class FirebaseEvents {
     }
     if (e.source !== 'avn') return null;
     const a = e.avn;
+    if (a.kind === 'send' && a.sdk === 'firebase') {
+      this.recordPlugin(e, a.event.name, {}, 'send', a.event.paramCount);
+      return null;
+    }
     if (a.kind === 'send' && a.sdk === 'bytebrew') {
       const row = { id: this.nextId++, ts: e.ts, name: a.event.name, paramCount: a.event.paramCount, entryId: e.id };
       this.byteBrew.push(row);
@@ -45,18 +63,31 @@ export class FirebaseEvents {
     // The plugin's own probe event after Firebase init (debug builds only).
     const probe = a.kind === 'status' && a.key === 'SDK.Firebase.EventVerified' ? /QA probe event (\S+) handed/.exec(a.message) : null;
     if (probe) {
-      this.plugin.push({ ts: e.ts, name: probe[1], params: {}, entryId: e.id });
+      this.recordPlugin(e, probe[1], {}, 'probe');
       return null;
     }
     const ev = a.kind === 'status' && a.key === 'Analytics.Event' ? a.event : null;
     if (!ev) return null;
     if (ev.stage === 'handed' || ev.stage === 'sent') {
-      this.plugin.push({ ts: e.ts, name: ev.name, params: ev.params ?? {}, entryId: e.id });
-      if (this.plugin.length > MAX_EVENTS) this.plugin.shift();
+      this.recordPlugin(e, ev.name, ev.params ?? {}, ev.stage, ev.paramCount);
     } else if (ev.stage === 'dropped' || ev.stage === 'before-init' || ev.stage === 'failed') {
       this.pluginProblems.push({ ts: e.ts, name: ev.name, stage: ev.stage, entryId: e.id });
     }
     return null;
+  }
+
+  recordPlugin(e, name, params, evidence, paramCount) {
+    // The same SDK call can produce both SendToFirebase and a status with values.
+    const previous = this.plugin.findLast((p) => p.name === name && Math.abs(p.ts - e.ts) < 1000 && !p.evidence.includes(evidence));
+    if (previous) {
+      previous.params = { ...previous.params, ...params };
+      previous.paramCount = paramCount ?? previous.paramCount;
+      previous.evidence.push(evidence);
+      if (Object.keys(params).length) previous.entryId = e.id;
+    } else {
+      this.plugin.push({ ts: e.ts, name, params, paramCount, entryId: e.id, evidence: [evidence] });
+      if (this.plugin.length > MAX_EVENTS) this.plugin.shift();
+    }
   }
 
   snapshot(now = Date.now(), debug = null) {
@@ -70,18 +101,21 @@ export class FirebaseEvents {
       check: f.auto ? 'automatic' : matchedIds.has(f.id) ? 'matches-plugin' : 'game-code',
     }));
     for (const p of r.notLogged) rows.push({ id: `missing-${p.entryId}`, ts: p.ts, sdk: 'FA', name: p.name, params: p.params, check: 'not-in-firebase', missing: true, entryId: p.entryId });
+    for (const p of r.pending) rows.push({ id: `pending-${p.entryId}`, ts: p.ts, sdk: 'FA', name: p.name, params: p.params, check: 'plugin-pending', missing: true, entryId: p.entryId });
     for (const p of this.pluginProblems) rows.push({ id: `problem-${p.entryId}`, ts: p.ts, sdk: 'FA', name: p.name, params: {}, check: p.stage === 'dropped' ? 'dropped-by-plugin' : 'sent-before-init', missing: true, entryId: p.entryId });
     for (const b of this.byteBrew) rows.push({ ...b, sdk: 'BB', params: {}, check: 'plugin-only' });
     rows.sort((x, y) => y.ts - x.ts);
     return {
       debug,
       receiving: this.fa.length > 0,
+      diagnostics: { ...this.diagnostics },
       counts: {
         firebase: this.fa.length,
         app: appFa.length,
         byteBrew: this.byteBrew.length,
         notLogged: r.notLogged.length,
         pending: pendingNames.size,
+        sent: this.plugin.length,
         problems: rows.filter((x) => x.problems?.length).length,
       },
       rows: rows.slice(0, 500),

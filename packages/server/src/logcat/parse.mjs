@@ -8,7 +8,7 @@ import { ownerOf, groupKey } from './owner.mjs';
 const LINE = /^\s*(\d+\.\d+)\s+(\d+)\s+(\d+)\s+([VDIWEFS])\s+(.*?)\s*:(?: (.*))?$/;
 
 export function parseLogcatLine(line) {
-  const m = LINE.exec(line);
+  const m = LINE.exec(line.replace(/\r$/, ''));
   if (!m) return null;
   return { ts: Math.round(Number(m[1]) * 1000), pid: Number(m[2]), tid: Number(m[3]), level: m[4], tag: m[5], message: m[6] ?? '' };
 }
@@ -25,7 +25,12 @@ export class Grouper {
 
   push(line) {
     const c = this.cur;
-    if (c && c.ts === line.ts && c.pid === line.pid && c.tid === line.tid && c.level === line.level && c.tag === line.tag) {
+    // Independent diagnostics can share a millisecond and thread. Firebase messages
+    // are individual records; a new AVN record starts another Unity message/stack.
+    const avn = line.tag === 'Unity' ? parseAvnLine(line.message) : null;
+    const separate = line.tag === 'FA' || line.tag === 'FA-SVC' ||
+      (avn && (avn.kind !== 'plain' || avn.caller)) || /^\[AVN Analytics\]/.test(line.message);
+    if (c && !separate && c.ts === line.ts && c.pid === line.pid && c.tid === line.tid && c.level === line.level && c.tag === line.tag) {
       c.lines.push(line.message);
     } else {
       this.flush();

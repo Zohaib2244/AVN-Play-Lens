@@ -9,13 +9,15 @@ const CHECK = {
   'matches-plugin': ['Matches plugin', 'tag-ok'],
   'game-code': ['Game code', 'tag-plain'],
   automatic: ['Automatic', 'tag-plain'],
-  'not-in-firebase': ['Not in Firebase', 'tag-bad'],
+  'not-in-firebase': ['No Firebase log', 'tag-warn'],
+  'plugin-pending': ['Sent to SDK', 'tag-plain'],
   'dropped-by-plugin': ['Dropped by plugin', 'tag-bad'],
   'sent-before-init': ['Sent before init', 'tag-warn'],
   'plugin-only': ['Plugin only', 'tag-plain'],
 };
 const WHY = {
-  'not-in-firebase': 'The plugin handed this event to Firebase, but Firebase never logged it. Usual causes: Firebase was not ready yet, the event name breaks a Firebase rule, or analytics collection is off in this build.',
+  'not-in-firebase': 'The plugin handed this event to the Firebase SDK, but no matching event payload was captured for this game. This does not prove upload failure. Check SDK logs and Firebase DebugView; shared service logs without a package cannot be attributed safely.',
+  'plugin-pending': 'The plugin handed this event to the Firebase SDK. Waiting for a matching Firebase event log; SDK handoff does not confirm server delivery.',
   'dropped-by-plugin': 'The plugin dropped this event because Firebase was not initialized yet.',
   'sent-before-init': 'The plugin sent this before Firebase finished starting, so Firebase may have dropped it.',
   'plugin-only': 'ByteBrew has no debug log on the phone, so only the plugin line is visible: the event name and how many parameters it had, not their values.',
@@ -196,7 +198,7 @@ export function Firebase() {
     <main className="main">
       <PageHead
         title="Firebase events"
-        sub={<>{pkg} on {deviceName(device)} · {fb.counts.firebase} logged by Firebase{fb.counts.notLogged ? <> · <span style={{ color: 'var(--bad)' }}>{fb.counts.notLogged} sent by the plugin but not logged</span></> : null}</>}
+        sub={<>{pkg} on {deviceName(device)} · {fb.counts.firebase} logged by Firebase{fb.counts.sent ? ` · ${fb.counts.sent} handed to SDK` : ''}{fb.counts.notLogged ? <> · <span style={{ color: 'var(--warn)' }}>{fb.counts.notLogged} without a matching Firebase log</span></> : null}</>}
       >
         {fb.debug?.on && (fb.receiving ? <LiveBars label="Listening" /> : <span className="live paused">Waiting for Firebase lines</span>)}
         <Menu items={[
@@ -212,6 +214,16 @@ export function Firebase() {
           <button className="linkish" onClick={() => setView('firebase-setup')}>Set it up</button>
         </div>
       )}
+
+      {fb.debug?.on && !fb.receiving && <section className="card" style={{ padding: '18px 22px' }} role="status">
+        <strong>{fb.diagnostics?.lines ? 'Firebase SDK is logging; waiting for event payloads' : 'Waiting for Firebase SDK logs'}</strong>
+        <p className="mute" style={{ margin: '8px 0', lineHeight: 1.6 }}>{fb.diagnostics?.lines
+          ? `${fb.diagnostics.lines} SDK log lines captured${fb.diagnostics.collection === true ? '. Analytics collection is enabled' : fb.diagnostics.collection === false ? '. Analytics collection is disabled' : ''}${fb.diagnostics.dispatches ? `; ${fb.diagnostics.dispatches} event dispatches reported` : ''}. Event names and parameters are listed when Firebase logs them for this game.`
+          : 'Debug mode is enabled. Restart the game with tracking active, then play a level. Earlier events are not backfilled.'}</p>
+        <p className="dim" style={{ margin: 0, fontSize: 13 }}>SDK handoff and local logging do not confirm delivery to Firebase. An ad blocker, Private DNS or VPN can prevent Analytics uploads.</p>
+        {fb.diagnostics?.issue && <p className="mono warnc" style={{ overflowWrap: 'anywhere', fontSize: 13 }}>{fb.diagnostics.issue}</p>}
+        <button className="linkish" style={{ marginTop: 12 }} onClick={() => setView('logs')}>Inspect game logs</button>
+      </section>}
 
       {fb.rows.some((r) => r.sdk === 'BB') && <div style={{ alignSelf: 'flex-start' }} className="seg" role="group" aria-label="Show events from">
           {[['ALL', 'All'], ['FA', 'Firebase'], ['BB', 'ByteBrew']].map(([k, label]) => <button key={k} aria-pressed={sdk === k} onClick={() => setSdk(k)}>{label}</button>)}

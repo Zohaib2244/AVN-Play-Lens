@@ -242,7 +242,7 @@ export function Health() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           {seenSdks.map((c) => (
             <SdkCard key={c.key} card={c} extra={{
-              'SDK.Firebase': h.firstEventVerified ? 'First event confirmed' : null,
+              'SDK.Firebase': h.firstEventVerified ? 'Probe handed to SDK' : null,
               'SDK.AdsProvider': [mc?.country, h.adapterSummary && `${h.adapterSummary.ok} of ${h.adapterSummary.total} adapters`].filter(Boolean).join(' · ') || null,
               'SDK.AdMob': 'Used for App Open',
               'SDK.RemoteConfig': h.rc.fetch ? `last fetch: ${h.rc.fetch.lastFetchStatus}` : null,

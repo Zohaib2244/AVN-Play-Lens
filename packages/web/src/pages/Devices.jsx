@@ -95,13 +95,13 @@ function WifiControls({ saved, connected, onChange }) {
 
 
 export function Devices() {
-  const { devices, serial, selectDevice, setView, online, status } = useApp();
+  const { devices, serial, selectDevice, setView, online } = useApp();
   const [saved, setSaved] = useState([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(false);
   const load = async (action) => { try { setSaved(await api('devices/saved')); if (action === 'forget') setNotice(true); } catch (e) { setError(e.message); } };
   useEffect(() => { if (online) load(); }, [online, devices]);
-  return <main className="main"><PageHead title="Devices" sub="Manage phone connections. Adding a device does not start tracking."><button className="btn btn-warm" disabled={!status?.adb} onClick={() => setView('connect')}>Connect another device</button></PageHead>
+  return <main className="main"><PageHead title="Devices" sub="Manage phone connections. Adding a device does not start tracking."><button className="btn btn-warm" onClick={() => setView('connect')}>Connect another device</button></PageHead>
     {notice && <div className="card" style={{ padding: 20 }}>Forgotten in PlayLens. To fully unpair, on your phone go to Developer options → Wireless debugging → Paired devices, select this computer and tap Forget.</div>}
     {error && <p role="alert">{error}</p>}
     <div className="grid-cards">{devices.map((d) => {

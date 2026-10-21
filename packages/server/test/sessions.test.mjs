@@ -1,14 +1,15 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import os, { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import WebSocket from 'ws';
 
 // This worker owns a temporary history store; never touch the user's captures.
-process.env.HOME = mkdtempSync(join(tmpdir(), 'playlens-session-tests-'));
+const sessionTestHome = mkdtempSync(join(tmpdir(), 'playlens-session-tests-'));
+mock.method(os, 'homedir', () => sessionTestHome);
 const { SessionRecorder, listSessions, sessionDetails, sessionText, deleteSession, SESSIONS_DIR } = await import('../src/session/recorder.mjs');
 const { createServer } = await import('../src/api/server.mjs');
 const { RulesStore } = await import('../src/rules/loader.mjs');

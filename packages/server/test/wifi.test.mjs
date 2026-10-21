@@ -51,6 +51,35 @@ test('an existing IP connection is reused', async (t) => {
   assert.ok(!calls.some((a) => a[0] === 'connect' || a[0] === 'disconnect'));
 });
 
+test('pairing recognizes an automatic ADB connection without mDNS discovery', async (t) => {
+  const { adb, store, connections, calls } = setup(t, []);
+  const run = adb.run.bind(adb);
+  adb.run = async (args) => {
+    if (args[0] === 'mdns') throw new Error('mDNS unavailable');
+    const out = await run(args);
+    return args[0] === 'pair' ? `${out} to 192.168.1.50:40123 [guid=${svc.name}]` : out;
+  };
+  const pair = new Pairing(adb, store, connections);
+  assert.equal((await pair.pairWithCode('192.168.1.50:40123', '123456')).state, 'connected');
+  assert.equal(store.list()[0].id, serviceId(svc.name));
+  assert.ok(!calls.some((args) => args[0] === 'connect'));
+});
+
+test('an unresolvable mDNS name falls back to the advertised IP connection', async (t) => {
+  const { adb, connections, online, calls } = setup(t, []);
+  const run = adb.run.bind(adb);
+  adb.run = (args) => {
+    if (args[0] === 'connect' && args[1] === serial) {
+      calls.push(args);
+      return Promise.reject(new Error('Cannot resolve service'));
+    }
+    return run(args);
+  };
+  assert.equal(await connections.connect(svc), true);
+  assert.deepEqual([...online], [svc.address]);
+  assert.deepEqual(calls.filter((args) => args[0] === 'connect'), [['connect', serial], ['connect', svc.address]]);
+});
+
 test('keep-alive removes an existing duplicate from ADB without touching another phone', async (t) => {
   const { adb, store, connections, online } = setup(t, [svc.address, serial, 'OTHER_USB']);
   const keepAlive = new KeepAlive(adb, store, null, 10000, connections);
@@ -110,6 +139,40 @@ test('saved device API lists, disconnects, reconnects and forgets; rejects unkno
   assert.equal((await fetch(`${base}/${id}/forget`, { method: 'POST' })).status, 404);
   assert.equal((await fetch(`${base}/UNKNOWN/forget`, { method: 'POST' })).status, 404);
   assert.equal((await fetch(`${base}/UNKNOWN/forget`, { method: 'POST', headers: { origin: 'http://evil.example' } })).status, 403);
+});
+
+test('manual address connection works without discovery and returns the ADB failure reason', async (t) => {
+  const { adb, store, connections, online } = setup(t, []);
+  connections.services = async () => { throw new Error('mDNS unavailable'); };
+  const server = createServer({ port: 7496, staticDir: null, adb, store, connections,
+    devices: () => [], onDevices: () => {}, status: () => ({}) });
+  await server.listen();
+  t.after(() => server.close());
+  const connect = () => fetch('http://127.0.0.1:7496/api/connect', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address: svc.address }),
+  });
+  assert.equal((await connect()).status, 200);
+  assert.ok(online.has(svc.address));
+  const run = adb.run.bind(adb);
+  adb.run = (args) => args[0] === 'connect' ? Promise.resolve('failed to connect: connection refused') : run(args);
+  const failed = await connect();
+  assert.equal(failed.status, 502);
+  assert.match((await failed.json()).error, /connection refused/);
+});
+
+test('successful pairing without an active connection stays paired instead of reporting pairing failure', { timeout: 20000 }, async (t) => {
+  const { adb, store, connections } = setup(t, []);
+  const run = adb.run.bind(adb);
+  adb.run = (args) => {
+    if (args[0] === 'pair') return Promise.resolve('Successfully paired [guid=adb-PHONE123-AbCd]');
+    if (args[0] === 'mdns') return Promise.resolve('');
+    return run(args);
+  };
+  const pair = new Pairing(adb, store, connections);
+  const result = await pair.pairWithCode('192.168.1.50:40123', '123456');
+  assert.equal(result.state, 'paired');
+  assert.match(result.error, /main Wireless debugging screen/);
 });
 
 test('cleans an IP alias that appears during a fallback connection', async (t) => {

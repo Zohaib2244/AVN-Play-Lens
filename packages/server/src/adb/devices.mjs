@@ -33,20 +33,22 @@ export function transportOf(serial) {
 }
 
 // track-devices sends frames: 4 hex digits of length, then that many bytes of device list.
+// The Windows CLI expands LF to CRLF without adjusting the frame length.
 export class TrackFrameParser {
   constructor() {
     this.buf = '';
   }
 
   push(chunk) {
-    this.buf += chunk;
+    this.buf += chunk.replace(/\r/g, '');
     const frames = [];
     while (this.buf.length >= 4) {
-      const len = parseInt(this.buf.slice(0, 4), 16);
-      if (Number.isNaN(len)) {
+      const header = this.buf.slice(0, 4);
+      if (!/^[0-9a-f]{4}$/i.test(header)) {
         this.buf = '';
         break;
       }
+      const len = parseInt(header, 16);
       if (this.buf.length < 4 + len) break;
       frames.push(parseDeviceList(this.buf.slice(4, 4 + len)));
       this.buf = this.buf.slice(4 + len);

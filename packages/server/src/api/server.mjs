@@ -198,19 +198,19 @@ export function createServer(ctx) {
       if (!ctx.adb || !ADDRESS_RE.test(address || '')) return send(res, 400, { error: 'Use address:port' });
       if (ctx.connections) {
         return ctx.connections.exclusive(async () => {
-          const svc = (await ctx.connections.services()).find((s) => s.kind === 'connect' && s.address === address);
+          const svc = (await ctx.connections.services().catch(() => [])).find((s) => s.kind === 'connect' && s.address === address);
           if (svc) {
             const ok = await ctx.connections.connect(svc);
-            return send(res, ok ? 200 : 502, { ok, message: ok ? 'Connected' : 'Connection failed' });
+            return send(res, ok ? 200 : 502, { ok, message: ok ? 'Connected' : 'Connection failed', ...(!ok && { error: 'The phone did not accept the connection. Check the connection port on the main Wireless debugging screen.' }) });
           }
           const out = await ctx.adb.run(['connect', address], { timeout: 10000 });
           const ok = /^(?:already )?connected to /im.test(out);
-          return send(res, ok ? 200 : 502, { ok, message: out.trim() });
+          return send(res, ok ? 200 : 502, { ok, message: out.trim(), ...(!ok && { error: out.trim() || 'Connection failed' }) });
         });
       }
       const out = await ctx.adb.run(['connect', address], { timeout: 10000 });
       const ok = /^(?:already )?connected to /im.test(out);
-      return send(res, ok ? 200 : 502, { ok, message: out.trim() });
+      return send(res, ok ? 200 : 502, { ok, message: out.trim(), ...(!ok && { error: out.trim() || 'Connection failed' }) });
     }
     return send(res, 404, { error: 'not found' });
   }

@@ -6,7 +6,9 @@ import WebSocket from 'ws';
 import { parseLogcatLine, Grouper, classify, belongsToGame, startedPid } from '../src/logcat/parse.mjs';
 import { parseDeviceList, TrackFrameParser, parseMdnsServices, transportOf } from '../src/adb/devices.mjs';
 import { parseForeground, parsePids, parseGetprop } from '../src/device/info.mjs';
-import { adbCandidates } from '../src/adb/locate.mjs';
+import { adbCandidates, locateAdb } from '../src/adb/locate.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { makeQrPayload, serviceId } from '../src/wifi/pairing.mjs';
 import { replayDevice } from '../src/replay/source.mjs';
 import { createServer } from '../src/api/server.mjs';
@@ -80,7 +82,24 @@ test('mdns services, foreground app, pids, getprop', () => {
 test('adb candidates include Unity and the env override first', () => {
   const list = adbCandidates({ PLAYLENS_ADB: '/x/adb', PATH: '/usr/bin' }, 'linux');
   assert.equal(list[0], '/x/adb');
-  assert.ok(list.includes('/usr/bin/adb'));
+  assert.ok(list.includes(join('/usr/bin', 'adb')));
+});
+
+test('finds ADB in a custom Unity Hub editor install folder on Windows', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'playlens-unity-adb-'));
+  try {
+    const hubDir = join(dir, 'roaming', 'UnityHub');
+    const editors = join(dir, 'Unity Editors');
+    const binDir = join(editors, '6000.3.25f1', 'Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools');
+    mkdirSync(hubDir, { recursive: true }); mkdirSync(binDir, { recursive: true });
+    writeFileSync(join(hubDir, 'secondaryInstallPath.json'), JSON.stringify(editors));
+    const adb = join(binDir, 'adb.exe'); writeFileSync(adb, 'test fixture');
+    const result = locateAdb({ APPDATA: join(dir, 'roaming'), PATH: '' }, 'win32');
+    assert.ok(result.searched.includes(adb));
+    assert.equal(result.path, adb);
+    writeFileSync(join(hubDir, 'secondaryInstallPath.json'), 'bad json');
+    assert.doesNotThrow(() => adbCandidates({ APPDATA: join(dir, 'roaming'), PATH: '' }, 'win32'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('QR payload format', () => {

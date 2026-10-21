@@ -87,15 +87,22 @@ export class Pairing extends EventEmitter {
 
   async pairAndConnect(job, address, secret) {
     this.update({ state: 'pairing' });
-    const out = await this.adb.run(['pair', address, secret], { timeout: 20000 }).catch((e) => e.stdout || e.message);
+    const out = await this.adb.run(['pair', address, secret], { timeout: 20000 }).catch((e) => e.stdout || e.stderr || e.message);
     if (job.cancelled || this.job !== job) return;
     if (!/Successfully paired/i.test(out)) {
       return this.update({ state: 'failed', error: (out || 'Pairing failed').trim() });
     }
     const ip = address.split(':')[0];
+    const pairedName = /\[guid=([^\]]+)\]/i.exec(out)?.[1];
+    this.update({ state: 'connecting' });
     // The connect service usually appears a moment after pairing; adb may also connect on its own.
     for (let i = 0; i < 15 && !job.cancelled; i++) {
+      // ADB can already be connected even when mDNS discovery is unavailable or late.
+      const online = (await this.connections.devices()).find((d) => d.state === 'device' &&
+        (d.serial === `${pairedName}._adb-tls-connect._tcp` || d.serial.startsWith(ip + ':')));
+      if (job.cancelled || this.job !== job) return;
       const svc = (await this.mdns()).find((s) => s.kind === 'connect' && s.address.startsWith(ip + ':'));
+      if (job.cancelled || this.job !== job) return;
       if (svc) {
         const connected = await this.connections.exclusive(async () => {
           if (job.cancelled || this.job !== job) return false;
@@ -109,10 +116,17 @@ export class Pairing extends EventEmitter {
         if (job.cancelled || this.job !== job) return;
         if (connected) return this.update({ state: 'connected', address: svc.address });
       }
+      if (online) {
+        const name = pairedName || (online.serial.endsWith('._adb-tls-connect._tcp')
+          ? online.serial.replace(/\._adb-tls-connect\._tcp$/, '') : null);
+        if (name) this.store.remember({ id: serviceId(name), ip, name,
+          ...(online.serial.includes('._adb-tls-connect._tcp') ? {} : { address: online.serial }), autoReconnect: true });
+        return this.update({ state: 'connected', address: online.serial });
+      }
       await sleep(1000);
     }
     if (job.cancelled || this.job !== job) return;
-    this.update({ state: 'failed', error: 'Paired, but the phone did not accept the connection. Toggle wireless debugging and try again.' });
+    this.update({ state: 'paired', error: 'Pairing succeeded. Enter the IP address and port from the main Wireless debugging screen below to finish connecting.' });
   }
 
   cancel() {
@@ -233,7 +247,11 @@ export class WifiConnections {
       return true;
     }
     if (addressed?.state === 'device') return true;
-    const out = await this.adb.run(['connect', this.serial(svc)], { timeout: 10000 });
+    let out = await this.adb.run(['connect', this.serial(svc)], { timeout: 10000 }).catch(() => '');
+    // A discovered IP may be reachable even when this ADB cannot resolve the service name.
+    if (!/^(?:already )?connected to /im.test(out)) {
+      out = await this.adb.run(['connect', svc.address], { timeout: 10000 });
+    }
     if (!/^(?:already )?connected to /im.test(out)) return false;
     // Catch an automatic connection that appeared while the command was running.
     const after = await this.devices();

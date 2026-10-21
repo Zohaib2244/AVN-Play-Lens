@@ -9,9 +9,10 @@ const STEPS = [
   { key: 'waiting', title: 'Scan the code' },
   { key: 'found', title: 'Phone found' },
   { key: 'pairing', title: 'Pairing, no cable needed' },
+  { key: 'connecting', title: 'Connecting to the phone' },
   { key: 'connected', title: 'Connected. Ready for Unity Build and Run' },
 ];
-const ORDER = { waiting: 0, found: 1, pairing: 2, connected: 3 };
+const ORDER = { waiting: 0, found: 1, pairing: 2, connecting: 3, paired: 3, connected: 4 };
 
 function useQrSvg(text) {
   const [svg, setSvg] = useState('');
@@ -24,24 +25,30 @@ function useQrSvg(text) {
 }
 
 export function Connect() {
-  const { pair, setView } = useApp();
+  const { pair, setView, status, online, devices } = useApp();
   const [address, setAddress] = useState('');
   const [code, setCode] = useState('');
   const [manualError, setManualError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [connectAddress, setConnectAddress] = useState('');
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  const connectedDevices = devices.filter((d) => d.state === 'device' && !d.replay);
   const svg = useQrSvg(pair.qr);
 
   useEffect(() => {
-    api('pair/qr', { method: 'POST' }).catch(() => {});
+    if (!online || !status?.adb) return;
+    api('pair/qr', { method: 'POST' }).catch((err) => setManualError(err.message));
     return () => { api('pair/cancel', { method: 'POST' }).catch(() => {}); };
-  }, []);
+  }, [online, status?.adb]);
 
   const step = ORDER[pair.state] ?? 0;
   const failed = pair.state === 'failed';
-  const caption = failed ? pair.error
+  const caption = failed || pair.state === 'paired' ? pair.error
     : pair.state === 'found' ? `Found a phone at ${pair.address}`
       : pair.state === 'pairing' ? 'Pairing…'
         : pair.state === 'connected' ? 'Done. You can close this tab; the phone stays connected.'
+          : pair.state === 'connecting' ? 'Paired successfully. Connecting to the phone...'
           : 'Waiting for your phone';
 
   const pairWithCode = async (ev) => {
@@ -57,6 +64,20 @@ export function Connect() {
     }
   };
 
+  const connectPaired = async (ev) => {
+    ev.preventDefault();
+    setConnectError('');
+    setConnectBusy(true);
+    try {
+      await api('connect', { method: 'POST', body: { address: connectAddress.trim() } });
+      setView('devices');
+    } catch (err) {
+      setConnectError(err.message);
+    } finally {
+      setConnectBusy(false);
+    }
+  };
+
   return (
     <div className="home" style={{ maxWidth: 1160 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '24px 0' }}>
@@ -65,6 +86,22 @@ export function Connect() {
         <span style={{ flex: '1 1 0' }} />
         <button className="btn" onClick={() => setView('home')}><Icon.back /> Back home</button>
       </header>
+
+      {(!online || !status?.adb) ? <section className="card" style={{ padding: 28, maxWidth: 760, margin: '40px auto' }} role="status">
+        <h1 className="px" style={{ fontSize: 28, marginTop: 0 }}>{!online ? 'Connecting to PlayLens…' : 'Android device tools were not found'}</h1>
+        {!online ? <p className="mute">Waiting for the local PlayLens server. Connection options will appear when it is ready.</p> : <>
+          <p className="mute">PlayLens needs Android Debug Bridge (ADB) to connect your phone. It searches your PATH, Android SDK, and Unity Hub editor installations, including a custom install folder.</p>
+          <p className="mute">If your SDK is elsewhere, set <code>PLAYLENS_ADB</code> to the full path of <code>adb{status?.platform === 'win32' ? '.exe' : ''}</code>, then restart PlayLens.</p>
+          {!!status?.adbSearched?.length && <details><summary>Locations checked</summary><pre className="trace" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{status.adbSearched.join('\n')}</pre></details>}
+        </>}
+      </section> : <>
+
+      {!!connectedDevices.length && <section className="card" style={{ padding: 20, maxWidth: 760, margin: '20px auto 0', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 300px' }}><strong>{connectedDevices.length === 1 ? 'Your phone is already connected' : `${connectedDevices.length} devices are already connected`}</strong>
+          <p className="mute" style={{ margin: '6px 0 0' }}>PlayLens includes devices connected through ADB, Unity, Android Studio or USB. You can use them without pairing here.</p>
+        </div>
+        <button className="btn btn-warm" onClick={() => setView('devices')}>View devices</button>
+      </section>}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '48px 72px', paddingTop: 40 }}>
         <section className="rise" style={{ flex: '1 1 380px', maxWidth: 480, minWidth: 0 }}>
@@ -87,8 +124,9 @@ export function Connect() {
               Can't scan? Use a pairing code <span className="dim mono" style={{ fontSize: 12 }}>MANUAL</span>
             </summary>
             <form onSubmit={pairWithCode} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 20px 20px' }}>
+              <p className="mute" style={{ flex: '1 1 100%', margin: 0, fontSize: 13.5 }}>On the phone, choose <strong>Pair device with pairing code</strong>. Enter the address, port and code from that dialog. Its port differs from the connection port.</p>
               <div style={{ flex: '2 1 160px' }}>
-                <label htmlFor="ip" className="eyebrow" style={{ display: 'block', marginBottom: 6 }}>Address and port</label>
+                <label htmlFor="ip" className="eyebrow" style={{ display: 'block', marginBottom: 6 }}>Pairing address and port</label>
                 <input id="ip" className="field" placeholder="192.168.1.42:37115" value={address} onChange={(e) => setAddress(e.target.value)} />
               </div>
               <div style={{ flex: '1 1 110px' }}>
@@ -97,6 +135,17 @@ export function Connect() {
               </div>
               <button className="btn" style={{ flex: '1 1 100%', height: 42 }} disabled={busy || !address || !code}>{busy ? <><Spinner />Pairing…</> : 'Pair and connect'}</button>
               {manualError && <div style={{ color: 'var(--bad)', fontSize: 13.5 }}>{manualError}</div>}
+            </form>
+          </details>
+
+          <details className="card" style={{ marginTop: 14 }} open={pair.state === 'paired' || undefined}>
+            <summary style={{ cursor: 'pointer', padding: '16px 20px', fontWeight: 700 }}>Already paired? Connect by address</summary>
+            <form onSubmit={connectPaired} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 20px 20px' }}>
+              <p className="mute" style={{ margin: 0, fontSize: 13.5 }}>Use the IP address and port on the main <strong>Wireless debugging</strong> screen, outside the pairing dialog. No pairing code is needed.</p>
+              <label htmlFor="connect-address" className="eyebrow">Connection address and port</label>
+              <input id="connect-address" className="field" style={{ width: '100%' }} placeholder="192.168.1.42:39703" value={connectAddress} onChange={(e) => setConnectAddress(e.target.value)} required />
+              <button className="btn" style={{ width: '100%' }} disabled={connectBusy || !connectAddress.trim()}>{connectBusy ? <><Spinner /> Connecting...</> : 'Connect paired phone'}</button>
+              {connectError && <div role="alert" style={{ color: 'var(--bad)', fontSize: 13.5 }}>{connectError}</div>}
             </form>
           </details>
         </section>
@@ -131,6 +180,7 @@ export function Connect() {
           <div className="dim" style={{ fontSize: 13.5, textAlign: 'center', maxWidth: 340, lineHeight: 1.55 }}>Phone and computer need the same Wi-Fi. Office networks sometimes block this; a phone hotspot works.</div>
         </section>
       </div>
+      </>}
     </div>
   );
 }

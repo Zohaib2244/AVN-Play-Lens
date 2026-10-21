@@ -1,16 +1,24 @@
 // Finds the adb binary. Order: PLAYLENS_ADB, PATH, ANDROID_HOME / ANDROID_SDK_ROOT,
 // Unity Hub's bundled Android SDK (newest editor first), Android Studio's default SDK.
 // Using Unity's own adb keeps PlayLens and Unity's Build and Run on the same adb version.
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, delimiter } from 'node:path';
 import os from 'node:os';
 
-function unityHubAdbs(platform) {
+function unityHubAdbs(platform, env) {
   const roots = platform === 'darwin'
     ? [{ dir: '/Applications/Unity/Hub/Editor', tail: ['PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb'] }]
     : platform === 'win32'
       ? [{ dir: 'C:\\Program Files\\Unity\\Hub\\Editor', tail: ['Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb.exe'] }]
       : [{ dir: join(os.homedir(), 'Unity', 'Hub', 'Editor'), tail: ['Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb'] }];
+  if (platform === 'win32') {
+    // Unity Hub permits moving editor installs off the system drive.
+    const hubDir = join(env.APPDATA || join(os.homedir(), 'AppData', 'Roaming'), 'UnityHub');
+    try {
+      const custom = JSON.parse(readFileSync(join(hubDir, 'secondaryInstallPath.json'), 'utf8'));
+      if (typeof custom === 'string' && custom.trim()) roots.push({ ...roots[0], dir: custom });
+    } catch { /* Hub may not be installed/configured. */ }
+  }
   const out = [];
   for (const { dir, tail } of roots) {
     let versions = [];
@@ -27,7 +35,7 @@ export function adbCandidates(env = process.env, platform = process.platform) {
   if (env.PLAYLENS_ADB) list.push(env.PLAYLENS_ADB);
   for (const dir of (env.PATH || '').split(delimiter)) if (dir) list.push(join(dir, exe));
   for (const sdk of [env.ANDROID_HOME, env.ANDROID_SDK_ROOT]) if (sdk) list.push(join(sdk, 'platform-tools', exe));
-  list.push(...unityHubAdbs(platform));
+  list.push(...unityHubAdbs(platform, env));
   if (platform === 'darwin') list.push(join(os.homedir(), 'Library', 'Android', 'sdk', 'platform-tools', exe));
   if (platform === 'win32' && env.LOCALAPPDATA) list.push(join(env.LOCALAPPDATA, 'Android', 'Sdk', 'platform-tools', exe));
   if (platform === 'linux') list.push(join(os.homedir(), 'Android', 'Sdk', 'platform-tools', exe));

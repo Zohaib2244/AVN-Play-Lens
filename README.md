@@ -63,6 +63,8 @@ Pass your own capture with `node packages/server/bin/avn-playlens.mjs --replay m
 
 ## Develop
 
+See [the automated game QA plan](docs/QA_PLAN.md) for the proposed runner, Unity Test Framework integration, AVN QA Bridge and AI exploration roadmap.
+
 ```bash
 npm run dev:server   # API on 7420 with the replay device
 npm run dev:web      # Vite on http://localhost:5173 with hot reload

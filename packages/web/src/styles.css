@@ -427,6 +427,40 @@ button, input, select { font: inherit; color: inherit; }
 .erow.missing { background: rgba(240,133,122,.06); }
 .erow.missing .ename { color: var(--bad); }
 .edetail { display: flex; flex-wrap: wrap; gap: 16px 40px; padding: 16px 20px 20px 174px; background: var(--panel-2); border-top: 1px dashed var(--line); animation: open .3s cubic-bezier(.2,.8,.2,1) both; }
+.firebase-explorer { min-width: 0; }
+.event-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 16px; }
+.event-filter { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--mute); min-width: 0; }
+.event-filter .select { max-width: 420px; min-width: 180px; }
+.event-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--mute); cursor: pointer; }
+.event-toggle input { accent-color: var(--warm); width: 16px; height: 16px; margin: 0; }
+.event-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; font-size: 13px; margin-bottom: 12px; }
+.event-note { font-size: 13px; margin: 0 0 12px; }
+.event-dictionary { overflow: hidden; }
+.event-dictionary-intro { padding: 20px; }
+.event-dictionary-intro h2 { margin: 0 0 8px; font-size: 24px; }
+.event-dictionary-intro p { font-size: 14px; line-height: 1.6; margin: 0; max-width: 900px; }
+.event-stats { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.event-stats th, .event-stats td { padding: 16px 20px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.event-stats thead th { color: var(--dim); font-size: 11px; font-weight: 400; text-transform: uppercase; letter-spacing: .08em; background: var(--well); white-space: nowrap; }
+.event-stats tbody th { font-weight: 400; min-width: 180px; overflow-wrap: anywhere; }
+.event-stats td.mono, .event-stats td:last-child { white-space: nowrap; }
+.event-stats .event-stat-count { color: var(--warm-text); font-weight: 500; }
+.event-type-origin { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-top: 7px; }
+.event-param-names { min-width: 220px; }
+.event-param-names .chip { margin: 0 6px 6px 0; font-size: 11px; overflow-wrap: anywhere; }
+.event-hidden { display: block; font-size: 12px; line-height: 1.5; margin-top: 8px; }
+.event-param-preview { overflow: hidden; white-space: nowrap; font-size: 12px; }
+.event-param-preview .chip { margin: 0 6px 0 0; }
+.event-parameters { flex: 1 1 280px; min-width: 0; }
+.event-parameters .kv { flex-wrap: wrap; overflow-wrap: anywhere; }
+.event-evidence { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.event-explanation { border-radius: 12px; padding: 12px 14px; background: var(--panel); font-size: 14px; line-height: 1.5; }
+.event-internal-label { font-size: 10px; margin-left: 8px; font-family: var(--font-ui); }
+@media (max-width: 600px) {
+  .event-filter { width: 100%; }
+  .event-filter .select { flex: 1; min-width: 0; max-width: 100%; }
+  .event-toolbar { gap: 14px; }
+}
 .blk { flex: 1 1 0; height: 22px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); transform-origin: bottom; animation: pop2 .5s cubic-bezier(.34,1.56,.64,1) both; }
 .blk.ok { background: var(--ok); border-color: var(--ok); }
 .blk.problem { background: var(--warn); border-color: var(--warn); }

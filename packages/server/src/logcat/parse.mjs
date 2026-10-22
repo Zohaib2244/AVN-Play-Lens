@@ -2,6 +2,7 @@
 // classification into sources and kinds for the UI.
 import { parseAvnLine } from '../avn/parse.mjs';
 import { parseFaLine } from '../avn/fa.mjs';
+import { firebaseServicePackage } from '../avn/fa-service.mjs';
 import { ownerOf, groupKey } from './owner.mjs';
 
 // "1729420812.123 18342 18360 I Unity   : message"
@@ -65,7 +66,7 @@ export function classify(entry, pkg, fromGame = true) {
     }
   } else if (entry.tag === 'FA' || entry.tag === 'FA-SVC') {
     e.source = 'firebase';
-    const fa = parseFaLine(entry.tag, entry.message);
+    const fa = entry.fa ?? parseFaLine(entry.tag, entry.message);
     if (fa) {
       e.fa = fa;
       e.kind = 'event';
@@ -96,14 +97,15 @@ export function classify(entry, pkg, fromGame = true) {
 }
 
 // Keep only the game's processes and system diagnostics naming the exact package.
-// Shared Firebase service lines without a verified game PID are excluded.
+// Shared Firebase service lines require an explicit protocol-level package ID.
 export function belongsToGame(entry, pkg, pids) {
   if (!pkg) return false;
   if (pids.has(entry.pid)) return true;
   const text = entry.more ? entry.message + ' ' + entry.more.join(' ') : entry.message;
   const named = new RegExp(`(^|[^a-zA-Z0-9_.])${pkg.replace(/\./g, '\\.')}($|[^a-zA-Z0-9_.])`).test(text);
   // Unattributed FA/FA-SVC lines may belong to any app on the phone.
-  if (entry.tag === 'FA' || entry.tag === 'FA-SVC') return false;
+  if (entry.tag === 'FA-SVC') return firebaseServicePackage(entry.message) === pkg;
+  if (entry.tag === 'FA') return false;
   if (['ActivityManager', 'ActivityTaskManager', 'DEBUG', 'crash_dump', 'libc'].includes(entry.tag)) return named;
   return false;
 }

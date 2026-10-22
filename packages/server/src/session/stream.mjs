@@ -4,6 +4,7 @@
 import { EventEmitter } from 'node:events';
 import { parseLogcatLine, Grouper, classify, belongsToGame, startedPid } from '../logcat/parse.mjs';
 import { pidsOf } from '../device/info.mjs';
+import { FirebaseServiceCapture } from '../avn/fa-service.mjs';
 
 const BUFFER = 20000;
 
@@ -19,16 +20,25 @@ export class LogStream extends EventEmitter {
     this.counts = { total: 0, recent: [] };
     this.state = 'starting';
     this.grouper = new Grouper((e) => this.accept(e));
+    this.firebaseService = new FirebaseServiceCapture(pkg);
   }
 
   async start() {
     this.stopped = false;
+    this.firstLogTs = null;
+    this.firebaseService.reset();
     if (this.pkg) await this.refreshPids();
     const ready = this.source.start(
       (line) => {
         if (this.stopped) return;
         const parsed = parseLogcatLine(line);
-        if (parsed) this.grouper.push(parsed);
+        if (parsed) {
+          if (this.firstLogTs == null) {
+            this.firstLogTs = parsed.ts;
+            this.firebaseService.reset(Number.isFinite(this.source.since) ? this.source.since : parsed.ts);
+          }
+          this.grouper.push(parsed);
+        }
       },
       (reason) => this.setState('ended', reason),
     );
@@ -60,7 +70,13 @@ export class LogStream extends EventEmitter {
   accept(raw) {
     const started = startedPid(raw, this.pkg);
     if (started) this.pids.add(started);
+    if (started && /Start proc \d+:([^/]+)\//.exec(raw.message)?.[1] === this.pkg) this.firebaseService.reset(raw.ts);
+    for (const event of this.firebaseService.push(raw)) this.record(event);
     if (!this.all && this.pkg && !belongsToGame(raw, this.pkg, this.pids)) return;
+    this.record(raw);
+  }
+
+  record(raw) {
     const entry = classify(raw, this.pkg, this.pids.has(raw.pid));
     entry.id = this.nextId++;
     this.buffer.push(entry);
@@ -111,12 +127,16 @@ export function adbSource(adb, serial, { history = false } = {}) {
   let proc = null;
   let stopped = false;
   let generation = 0;
+  let sinceTs = null;
   return {
+    get since() { return sinceTs; },
     start(onLine, onEnd) {
       stopped = false;
+      sinceTs = null;
       const token = ++generation;
       const launch = (since) => {
         if (stopped || token !== generation) return;
+        sinceTs = since ? Number(since) * 1000 : 0;
         const args = ['logcat', '-v', 'threadtime', '-v', 'epoch', '-b', 'main,system,crash'];
         if (!history) args.push('-T', since || '1');
         proc = adb.spawn(args, { serial });

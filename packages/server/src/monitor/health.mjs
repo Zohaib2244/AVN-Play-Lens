@@ -218,8 +218,10 @@ export class Health {
       const key = Object.keys(params).find((k) => /^(level|level_number|levelnumber|level_num|current_level|lvl)$/i.test(k));
       if (key) { level = Number(params[key]); from = `${name}.${key}`; }
     }
-    if (!Number.isFinite(level)) return;
-    if (e.fa) this.levelFromFa = true;
+    // Upload batches can arrive after the player has already reached another
+    // level. They must not rewind live level checks or screenshot automation.
+    if (!Number.isFinite(level) || e.ts < (this.levels.at(-1)?.ts ?? -Infinity)) return;
+    if (e.fa && e.fa.evidence !== 'upload-batch') this.levelFromFa = true;
     this.levelSource ??= from;
     if (this.levels.at(-1)?.level !== level) this.levels.push({ level, ts: e.ts });
     if (this.levels.length > 500) this.levels.shift();

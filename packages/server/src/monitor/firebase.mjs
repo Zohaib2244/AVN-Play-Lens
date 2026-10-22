@@ -18,7 +18,8 @@ export class FirebaseEvents {
     this.plugin = [];
     this.pluginProblems = [];
     this.byteBrew = [];
-    this.diagnostics = { lines: 0, lastTs: null, collection: null, serviceConnected: false, dispatches: 0, issue: null };
+    this.catalog = new Map();
+    this.diagnostics = { lines: 0, lastTs: null, collection: null, serviceConnected: false, dispatches: 0, issue: null, upload: null };
     this.nextId = 1;
   }
 
@@ -31,6 +32,8 @@ export class FirebaseEvents {
       if (/App measurement collection disabled|App measurement disabled|analytics storage consent denied/i.test(e.message)) d.collection = false;
       if (/^Connected to remote service/.test(e.message)) d.serviceConnected = true;
       if (/^Logging telemetry for logEvent from database/.test(e.message)) d.dispatches++;
+      if (/^Gms url request successful\. app:/.test(e.message)) { d.upload = { state: 'successful', ts: e.ts, entryId: e.id }; d.issue = null; }
+      if (/^Gms url request failed\. app:/.test(e.message)) { d.upload = { state: 'failed', ts: e.ts, entryId: e.id }; d.issue = e.message; }
       if (/Network upload failed|net::ERR_|Missing google_app_id|collection disabled/i.test(e.message)) {
         d.issue = e.message;
         d.entryId = e.id;
@@ -38,14 +41,18 @@ export class FirebaseEvents {
     }
     if (e.fa) {
       const f = e.fa;
+      if (f.eventKey && this.fa.some((row) => row.eventKey === f.eventKey)) return null;
       // FA and FA-SVC can both log the same event; keep one (the one with more detail).
       const dup = this.fa.findLast((x) => x.name === f.name && Math.abs(x.ts - e.ts) < 1500 && x.tag !== e.tag);
       if (dup) {
         if (Object.keys(f.params).length > Object.keys(dup.params).length) dup.params = f.params;
+        if (f.eventKey) dup.eventKey = f.eventKey;
+        this.catalogEvent('FA', dup, false);
         return null;
       }
-      const row = { id: this.nextId++, ts: e.ts, tag: e.tag, name: f.name, params: f.params, auto: f.auto, origin: f.origin, problems: checkLimits(f), entryId: e.id };
+      const row = { id: this.nextId++, ts: e.ts, tag: e.tag, name: f.name, params: f.params, auto: f.auto, origin: f.origin, eventKey: f.eventKey, evidence: f.evidence, problems: checkLimits(f), entryId: e.id };
       this.fa.push(row);
+      this.catalogEvent('FA', row);
       if (this.fa.length > MAX_EVENTS) this.fa.shift();
       return { sdk: 'firebase', ...row };
     }
@@ -58,6 +65,7 @@ export class FirebaseEvents {
     if (a.kind === 'send' && a.sdk === 'bytebrew') {
       const row = { id: this.nextId++, ts: e.ts, name: a.event.name, paramCount: a.event.paramCount, entryId: e.id };
       this.byteBrew.push(row);
+      this.catalogEvent('BB', row);
       return { sdk: 'bytebrew', ...row };
     }
     // The plugin's own probe event after Firebase init (debug builds only).
@@ -74,6 +82,25 @@ export class FirebaseEvents {
       this.pluginProblems.push({ ts: e.ts, name: ev.name, stage: ev.stage, entryId: e.id });
     }
     return null;
+  }
+
+  // Keep compact per-type stats for the entire capture even as old timeline rows expire.
+  // Automatic and app-origin occurrences stay separate so hiding automatic events
+  // also gives correct counts and time ranges for names used by both origins.
+  catalogEvent(sdk, event, increment = true) {
+    const auto = !!event.auto;
+    const key = JSON.stringify([sdk, event.name, auto]);
+    let type = this.catalog.get(key);
+    if (!type) {
+      type = { sdk, name: event.name, auto, count: 0, firstTs: event.ts, lastTs: event.ts, params: new Set() };
+      this.catalog.set(key, type);
+    }
+    if (increment) {
+      type.count++;
+      type.firstTs = Math.min(type.firstTs, event.ts);
+      type.lastTs = Math.max(type.lastTs, event.ts);
+    }
+    for (const name of Object.keys(event.params ?? {})) type.params.add(name);
   }
 
   recordPlugin(e, name, params, evidence, paramCount) {
@@ -105,19 +132,22 @@ export class FirebaseEvents {
     for (const p of this.pluginProblems) rows.push({ id: `problem-${p.entryId}`, ts: p.ts, sdk: 'FA', name: p.name, params: {}, check: p.stage === 'dropped' ? 'dropped-by-plugin' : 'sent-before-init', missing: true, entryId: p.entryId });
     for (const b of this.byteBrew) rows.push({ ...b, sdk: 'BB', params: {}, check: 'plugin-only' });
     rows.sort((x, y) => y.ts - x.ts);
+    const catalog = [...this.catalog.values()].map(({ params, ...type }) => ({ ...type, params: [...params].sort() }));
+    const total = (sdk, appOnly = false) => catalog.reduce((n, t) => n + (t.sdk === sdk && (!appOnly || !t.auto) ? t.count : 0), 0);
     return {
       debug,
       receiving: this.fa.length > 0,
       diagnostics: { ...this.diagnostics },
       counts: {
-        firebase: this.fa.length,
-        app: appFa.length,
-        byteBrew: this.byteBrew.length,
+        firebase: total('FA'),
+        app: total('FA', true),
+        byteBrew: total('BB'),
         notLogged: r.notLogged.length,
         pending: pendingNames.size,
         sent: this.plugin.length,
         problems: rows.filter((x) => x.problems?.length).length,
       },
+      catalog,
       rows: rows.slice(0, 500),
     };
   }

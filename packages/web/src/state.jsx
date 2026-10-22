@@ -352,7 +352,7 @@ export function viewStatus(monitor, perf) {
   return {
     performance: fps != null || mem != null ? { text: [fps != null && `${Math.round(fps)} FPS`, mem != null && `${Math.round(mem)} MB`].filter(Boolean).join(' · '), cls: fps != null && fps < 30 ? 'warm' : 'ok' } : { text: 'FPS, CPU, memory', cls: '' },
     health: !monitor?.health?.seen ? { text: 'Waiting for plugin lines', cls: '' } : issues ? { text: `${issues} to look at`, cls: 'warm' } : { text: 'All good', cls: 'ok' },
-    firebase: fb?.debug?.on ? { text: `Listening · ${fb.counts.firebase} logged`, cls: 'ok', ready: true } : { text: 'Needs setup', cls: 'warm', ready: false },
+    firebase: fb?.debug?.on ? { text: fb.receiving ? `${fb.counts.firebase} events logged` : fb.diagnostics?.upload?.state === 'successful' ? 'Upload confirmed' : fb.diagnostics?.lines ? 'SDK active' : 'Waiting for SDK', cls: fb.receiving || fb.diagnostics?.upload?.state === 'successful' ? 'ok' : '', ready: true } : { text: 'Needs setup', cls: 'warm', ready: false },
     checklist: run?.active ? { text: `Run live · ${items.filter((i) => i.status === 'ok').length} of ${items.length}`, cls: 'ok', ready: true } : run ? { text: 'Run finished', cls: '', ready: true } : { text: 'Needs setup', cls: 'warm', ready: false },
   };
 }

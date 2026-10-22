@@ -4,6 +4,7 @@ import { useApp, clock } from '../state.jsx';
 import { PageHead } from '../components/bits.jsx';
 import { StateBadge } from '../components/StateBadge.jsx';
 import { SessionHistory } from '../components/SessionHistory.jsx';
+import { FirebaseEvents } from '../components/FirebaseEvents.jsx';
 
 export function Sessions() {
   return <main className="main"><PageHead title="Session history" sub="Saved captures stay separate from the live session." /><SessionHistory filterable /></main>;
@@ -34,13 +35,7 @@ export function SavedSession() {
       <div className="seg" role="group" aria-label="Saved capture views">
         {[['firebase', `Firebase events (${events.length})`], ['logs', `Logs (${data.entries.length})`], ['ads', 'Ad state']].map(([id, title]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{title}</button>)}
       </div>
-      {tab === 'firebase' && <div className="card" style={{ overflow: 'hidden' }}>
-        {!events.length && <div className="empty">No Firebase events in this capture.</div>}
-        {events.map((e) => <div key={e.id} style={{ padding: '14px 20px', borderTop: '1px solid var(--line-soft)' }}>
-          <span className="mono dim" style={{ fontSize: 12.5, marginRight: 14 }}>{clock(e.ts, false)}</span><strong>{e.name}</strong><span className="tag tag-plain" style={{ marginLeft: 14 }}>{e.check}</span>
-          <div className="mono mute" style={{ fontSize: 12.5, marginTop: 8, overflowWrap: 'anywhere' }}>{JSON.stringify(e.params)}</div>
-        </div>)}
-      </div>}
+      {tab === 'firebase' && <FirebaseEvents firebase={data.snapshot?.firebase ?? { rows: [] }} />}
       {tab === 'logs' && <>
         <input className="field" placeholder="Search saved logs" aria-label="Search saved logs" value={search} onChange={(e) => { setSearch(e.target.value); setLimit(500); }} />
         <div className="card" style={{ overflow: 'hidden' }}>{logs.slice(0, limit).map((e, i) => <pre className="saved-log" key={i}>{clock(e.ts)} {e.level} {e.tag}: {e.message}{e.more?.length ? '\n' + e.more.join('\n') : ''}</pre>)}{!logs.length && <div className="empty">No matching lines.</div>}</div>

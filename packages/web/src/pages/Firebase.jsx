@@ -4,24 +4,7 @@ import { api } from '../api.js';
 import { PageHead, Check, Lattice } from '../components/bits.jsx';
 import { Menu, LiveBars, Skeleton, Spinner } from '../components/ui.jsx';
 import { useAppAction } from './Logs.jsx';
-
-const CHECK = {
-  'matches-plugin': ['Matches plugin', 'tag-ok'],
-  'game-code': ['Game code', 'tag-plain'],
-  automatic: ['Automatic', 'tag-plain'],
-  'not-in-firebase': ['No Firebase log', 'tag-warn'],
-  'plugin-pending': ['Sent to SDK', 'tag-plain'],
-  'dropped-by-plugin': ['Dropped by plugin', 'tag-bad'],
-  'sent-before-init': ['Sent before init', 'tag-warn'],
-  'plugin-only': ['Plugin only', 'tag-plain'],
-};
-const WHY = {
-  'not-in-firebase': 'The plugin handed this event to the Firebase SDK, but no matching event payload was captured for this game. This does not prove upload failure. Check SDK logs and Firebase DebugView; shared service logs without a package cannot be attributed safely.',
-  'plugin-pending': 'The plugin handed this event to the Firebase SDK. Waiting for a matching Firebase event log; SDK handoff does not confirm server delivery.',
-  'dropped-by-plugin': 'The plugin dropped this event because Firebase was not initialized yet.',
-  'sent-before-init': 'The plugin sent this before Firebase finished starting, so Firebase may have dropped it.',
-  'plugin-only': 'ByteBrew has no debug log on the phone, so only the plugin line is visible: the event name and how many parameters it had, not their values.',
-};
+import { FirebaseEvents, EVENT_CHECK as CHECK } from '../components/FirebaseEvents.jsx';
 
 function Stepper({ step, labels }) {
   return (
@@ -164,9 +147,6 @@ export function FirebaseSetup() {
 
 export function Firebase() {
   const { monitor, device, pkg, serial, send, setView, showInLogs, showToast } = useApp();
-  const [sdk, setSdk] = useState('ALL');
-  const [hideAuto, setHideAuto] = useState(false);
-  const [open, setOpen] = useState(null);
   const fb = monitor?.firebase;
   if (!fb) {
     return (
@@ -183,7 +163,6 @@ export function Firebase() {
     );
   }
 
-  const rows = fb.rows.filter((r) => (sdk === 'ALL' || r.sdk === sdk) && !(hideAuto && r.check === 'automatic'));
   const turnOff = async () => {
     try {
       await api(`devices/${encodeURIComponent(serial)}/firebase`, { method: 'POST', body: { pkg, on: false } });
@@ -200,9 +179,8 @@ export function Firebase() {
         title="Firebase events"
         sub={<>{pkg} on {deviceName(device)} · {fb.counts.firebase} logged by Firebase{fb.counts.sent ? ` · ${fb.counts.sent} handed to SDK` : ''}{fb.counts.notLogged ? <> · <span style={{ color: 'var(--warn)' }}>{fb.counts.notLogged} without a matching Firebase log</span></> : null}</>}
       >
-        {fb.debug?.on && (fb.receiving ? <LiveBars label="Listening" /> : <span className="live paused">Waiting for Firebase lines</span>)}
+        {fb.debug?.on && (fb.receiving ? <LiveBars label="Listening" /> : <span className="live paused">{fb.diagnostics?.upload?.state === 'successful' ? 'Upload confirmed' : fb.diagnostics?.lines ? 'Firebase SDK active' : 'Waiting for SDK activity'}</span>)}
         <Menu items={[
-          { label: 'Hide automatic events', pressed: hideAuto, onClick: () => setHideAuto(!hideAuto) },
           { label: 'Run setup again', onClick: () => setView('firebase-setup') },
           { label: 'Turn off Firebase debug mode', onClick: turnOff, hidden: device?.replay, danger: true },
         ]} />
@@ -215,61 +193,24 @@ export function Firebase() {
         </div>
       )}
 
-      {fb.debug?.on && !fb.receiving && <section className="card" style={{ padding: '18px 22px' }} role="status">
-        <strong>{fb.diagnostics?.lines ? 'Firebase SDK is logging; waiting for event payloads' : 'Waiting for Firebase SDK logs'}</strong>
+      {fb.diagnostics?.upload && <section className="card" style={{ padding: '16px 22px' }} role="status">
+        <strong className={fb.diagnostics.upload.state === 'successful' ? 'okc' : 'warnc'}>{fb.diagnostics.upload.state === 'successful' ? 'Analytics upload succeeded' : 'Analytics upload failed'}</strong>
+        <span className="dim" style={{ marginLeft: 12 }}>{clock(fb.diagnostics.upload.ts, false)}</span>
+        <p className="mute" style={{ margin: '8px 0 0' }}>Google Play services reported this result for {pkg}. Events below come from Firebase logs and upload batches identified with this package.</p>
+        {fb.diagnostics.upload.entryId && <button className="linkish" style={{ marginTop: 8 }} onClick={() => showInLogs(fb.diagnostics.upload.entryId)}>Show upload log</button>}
+      </section>}
+
+      {fb.debug?.on && !fb.receiving && fb.diagnostics?.upload?.state !== 'successful' && <section className="card" style={{ padding: '18px 22px' }} role="status">
+        <strong>{fb.diagnostics?.lines ? 'Firebase SDK activity detected' : 'Waiting for Firebase SDK logs'}</strong>
         <p className="mute" style={{ margin: '8px 0', lineHeight: 1.6 }}>{fb.diagnostics?.lines
-          ? `${fb.diagnostics.lines} SDK log lines captured${fb.diagnostics.collection === true ? '. Analytics collection is enabled' : fb.diagnostics.collection === false ? '. Analytics collection is disabled' : ''}${fb.diagnostics.dispatches ? `; ${fb.diagnostics.dispatches} event dispatches reported` : ''}. Event names and parameters are listed when Firebase logs them for this game.`
+          ? `${fb.diagnostics.lines} SDK log lines captured${fb.diagnostics.collection === true ? '. Analytics collection is enabled' : fb.diagnostics.collection === false ? '. Analytics collection is disabled' : ''}${fb.diagnostics.dispatches ? `; ${fb.diagnostics.dispatches} event dispatch${fb.diagnostics.dispatches === 1 ? '' : 'es'} reported` : ''}. This SDK can log event details in Google Play services upload batches; they appear as the next batch is captured.`
           : 'Debug mode is enabled. Restart the game with tracking active, then play a level. Earlier events are not backfilled.'}</p>
         <p className="dim" style={{ margin: 0, fontSize: 13 }}>SDK handoff and local logging do not confirm delivery to Firebase. An ad blocker, Private DNS or VPN can prevent Analytics uploads.</p>
         {fb.diagnostics?.issue && <p className="mono warnc" style={{ overflowWrap: 'anywhere', fontSize: 13 }}>{fb.diagnostics.issue}</p>}
         <button className="linkish" style={{ marginTop: 12 }} onClick={() => setView('logs')}>Inspect game logs</button>
       </section>}
 
-      {fb.rows.some((r) => r.sdk === 'BB') && <div style={{ alignSelf: 'flex-start' }} className="seg" role="group" aria-label="Show events from">
-          {[['ALL', 'All'], ['FA', 'Firebase'], ['BB', 'ByteBrew']].map(([k, label]) => <button key={k} aria-pressed={sdk === k} onClick={() => setSdk(k)}>{label}</button>)}
-        </div>}
-
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div className="erow eyebrow" style={{ cursor: 'default', minHeight: 40, borderTop: 0 }}>
-          <span>Time</span><span>From</span><span>Event</span><span>Parameters</span><span>Plugin check</span><span />
-        </div>
-        {rows.length === 0 && <div className="empty">{fb.debug?.on ? 'No events yet. Play the game for a moment.' : 'No events. Turn on Firebase debug mode first.'}</div>}
-        {rows.map((r) => {
-          const isOpen = open === r.id;
-          const [checkLabel, checkCls] = CHECK[r.check] ?? [r.check, 'tag-plain'];
-          const params = Object.entries(r.params ?? {}).filter(([k]) => !/^(ga_|firebase_)/.test(k));
-          return (
-            <div key={r.id}>
-              <button className={`erow${isOpen ? ' open' : ''}${r.missing ? ' missing' : r.problems?.length ? ' warn' : ''}`} onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
-                <span className="mono dim" style={{ fontSize: 12.5 }}>{clock(r.ts, false)}</span>
-                <span className={`tag sdk-${r.sdk}`} style={{ justifySelf: 'start' }}>{r.sdk}</span>
-                <span className="mono ename" style={{ fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                <span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {r.sdk === 'BB' ? <span className="dim mono" style={{ fontSize: 12.5 }}>{r.paramCount} params</span> : params.slice(0, 3).map(([k, v]) => <span key={k} className="chip" style={{ margin: '0 6px 0 0' }}><span className="dim">{k}</span>{String(v)}</span>)}
-                </span>
-                <span><span className={`tag ${checkCls}`}>{checkLabel}</span></span>
-                <svg className="car" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-              </button>
-              {isOpen && (
-                <div className="edetail">
-                  <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-                    <div className="eyebrow" style={{ marginBottom: 8 }}>All parameters</div>
-                    {Object.entries(r.params ?? {}).map(([k, v]) => (
-                      <div key={k} className="kv"><span className="mono mute">{k}</span><span className="mono">{String(v)}</span></div>
-                    ))}
-                    {!Object.keys(r.params ?? {}).length && <div className="dim" style={{ fontSize: 14 }}>{r.sdk === 'BB' ? 'Values are not visible for ByteBrew.' : 'No parameters.'}</div>}
-                  </div>
-                  <div style={{ flex: '1 1 220px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
-                    {WHY[r.check] && <div style={{ background: r.missing ? 'var(--bad-soft)' : 'var(--panel)', borderRadius: 12, padding: '12px 14px', fontSize: 14, lineHeight: 1.5, color: r.missing ? 'var(--bad)' : 'var(--mute)' }}>{WHY[r.check]}</div>}
-                    {r.problems?.map((p) => <div key={p} style={{ background: 'var(--warn-soft)', borderRadius: 12, padding: '10px 14px', fontSize: 14, color: 'var(--warn)' }}>{p}</div>)}
-                    {r.entryId && <button className="btn btn-sm" onClick={() => showInLogs(r.entryId)}>Show in logs</button>}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <FirebaseEvents firebase={fb} showInLogs={showInLogs} />
     </main>
   );
 }

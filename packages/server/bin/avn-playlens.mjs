@@ -69,7 +69,7 @@ rules.watch();
 
 const deviceListeners = new Set();
 const devices = () => [...(replay ? [replay.device] : []), ...(tracker?.list() ?? [])];
-tracker?.on('change', () => { for (const fn of deviceListeners) fn(devices()); });
+tracker?.on('change', () => { pairing?.observeDevices(tracker.list()); for (const fn of deviceListeners) fn(devices()); });
 
 const ctx = {
   port,

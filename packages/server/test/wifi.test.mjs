@@ -161,18 +161,77 @@ test('manual address connection works without discovery and returns the ADB fail
   assert.match((await failed.json()).error, /connection refused/);
 });
 
-test('successful pairing without an active connection stays paired instead of reporting pairing failure', { timeout: 20000 }, async (t) => {
-  const { adb, store, connections } = setup(t, []);
+async function waitForPair(pair, state) {
+  const deadline = Date.now() + 1500;
+  while (pair.state().state !== state && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(pair.state().state, state);
+}
+
+test('pairing waits for a verified connection, times out clearly, and retries without pairing again', async (t) => {
+  const { adb, store, connections, online } = setup(t, []);
   const run = adb.run.bind(adb);
+  let pairCalls = 0;
   adb.run = (args) => {
-    if (args[0] === 'pair') return Promise.resolve('Successfully paired [guid=adb-PHONE123-AbCd]');
+    if (args[0] === 'pair') { pairCalls++; return Promise.resolve(`Successfully paired [guid=${svc.name}]`); }
     if (args[0] === 'mdns') return Promise.resolve('');
+    // A command response alone must never produce the Connected badge.
+    if (args[0] === 'connect') return Promise.resolve(`connected to ${serial}`);
     return run(args);
   };
-  const pair = new Pairing(adb, store, connections);
+  const pair = new Pairing(adb, store, connections, { retryMs: 5, connectionTimeoutMs: 35 });
+  t.after(() => pair.cancel());
   const result = await pair.pairWithCode('192.168.1.50:40123', '123456');
-  assert.equal(result.state, 'paired');
-  assert.match(result.error, /main Wireless debugging screen/);
+  assert.equal(result.state, 'connecting');
+  assert.equal(store.list()[0].autoReconnect, true);
+  await waitForPair(pair, 'connection-failed');
+  assert.doesNotMatch(pair.state().error, /IP|port|pair again/);
+  online.add(serial);
+  assert.equal((await pair.retryConnection()).state, 'connected');
+  assert.equal(pairCalls, 1);
+});
+
+test('a late connect service is retried automatically after successful pairing', async (t) => {
+  const { adb, store, connections } = setup(t, []);
+  const run = adb.run.bind(adb);
+  let advertised = false;
+  let pairCalls = 0;
+  adb.run = (args) => {
+    if (args[0] === 'pair') { pairCalls++; return Promise.resolve(`Successfully paired [guid=${svc.name}]`); }
+    if (!advertised && args[0] === 'mdns') return Promise.resolve('');
+    if (!advertised && args[0] === 'connect') return Promise.resolve('cannot resolve service');
+    return run(args);
+  };
+  const pair = new Pairing(adb, store, connections, { retryMs: 5 });
+  t.after(() => pair.cancel());
+  assert.equal((await pair.pairWithCode('192.168.1.50:40123', '123456')).state, 'connecting');
+  advertised = true;
+  await waitForPair(pair, 'connected');
+  assert.equal(pair.state().address, svc.address);
+  assert.equal(pairCalls, 1);
+});
+
+test('tracker completes only the paired phone, and cancelling clears connection retries', async (t) => {
+  const { adb, store, connections, calls } = setup(t, []);
+  const run = adb.run.bind(adb);
+  adb.run = (args) => {
+    if (args[0] === 'pair') return Promise.resolve(`Successfully paired [guid=${svc.name}]`);
+    if (args[0] === 'mdns') return Promise.resolve('');
+    if (args[0] === 'connect') return Promise.resolve('cannot resolve service');
+    return run(args);
+  };
+  const pair = new Pairing(adb, store, connections, { retryMs: 20 });
+  t.after(() => pair.cancel());
+  await pair.pairWithCode('192.168.1.50:40123', '123456');
+  pair.observeDevices([{ serial: 'OTHER_USB', state: 'device' }]);
+  assert.equal(pair.state().state, 'connecting');
+  pair.observeDevices([{ serial: 'adb-PHONE123-NewSession._adb-tls-connect._tcp', state: 'device' }]);
+  assert.equal(pair.state().state, 'connected');
+  await pair.pairWithCode('192.168.1.50:40123', '123456');
+  pair.cancel();
+  const count = calls.length;
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(calls.length, count);
+  assert.equal(pair.state().state, 'idle');
 });
 
 test('cleans an IP alias that appears during a fallback connection', async (t) => {

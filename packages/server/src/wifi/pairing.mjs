@@ -27,12 +27,14 @@ export function makeQrPayload() {
 }
 
 export class Pairing extends EventEmitter {
-  constructor(adb, store, connections = new WifiConnections(adb, store)) {
+  constructor(adb, store, connections = new WifiConnections(adb, store), { retryMs = 2000, connectionTimeoutMs = 180000 } = {}) {
     super();
     this.adb = adb;
     this.store = store;
     this.connections = connections;
     this.job = null;
+    this.retryMs = retryMs;
+    this.connectionTimeoutMs = connectionTimeoutMs;
   }
 
   state() {
@@ -92,45 +94,87 @@ export class Pairing extends EventEmitter {
     if (!/Successfully paired/i.test(out)) {
       return this.update({ state: 'failed', error: (out || 'Pairing failed').trim() });
     }
-    const ip = address.split(':')[0];
-    const pairedName = /\[guid=([^\]]+)\]/i.exec(out)?.[1];
-    this.update({ state: 'connecting' });
-    // The connect service usually appears a moment after pairing; adb may also connect on its own.
-    for (let i = 0; i < 15 && !job.cancelled; i++) {
-      // ADB can already be connected even when mDNS discovery is unavailable or late.
-      const online = (await this.connections.devices()).find((d) => d.state === 'device' &&
-        (d.serial === `${pairedName}._adb-tls-connect._tcp` || d.serial.startsWith(ip + ':')));
-      if (job.cancelled || this.job !== job) return;
-      const svc = (await this.mdns()).find((s) => s.kind === 'connect' && s.address.startsWith(ip + ':'));
-      if (job.cancelled || this.job !== job) return;
-      if (svc) {
-        const connected = await this.connections.exclusive(async () => {
-          if (job.cancelled || this.job !== job) return false;
-          const result = await this.connections.connect(svc);
-          if (result && !job.cancelled && this.job === job) {
-            this.store.remember({ id: serviceId(svc.name), ip, address: svc.address, name: svc.name, autoReconnect: true });
-            return true;
-          }
-          return false;
-        });
-        if (job.cancelled || this.job !== job) return;
-        if (connected) return this.update({ state: 'connected', address: svc.address });
-      }
-      if (online) {
-        const name = pairedName || (online.serial.endsWith('._adb-tls-connect._tcp')
-          ? online.serial.replace(/\._adb-tls-connect\._tcp$/, '') : null);
-        if (name) this.store.remember({ id: serviceId(name), ip, name,
-          ...(online.serial.includes('._adb-tls-connect._tcp') ? {} : { address: online.serial }), autoReconnect: true });
-        return this.update({ state: 'connected', address: online.serial });
-      }
-      await sleep(1000);
+    job.ip = address.split(':')[0];
+    job.pairedName = /\[guid=([^\]]+)\]/i.exec(out)?.[1];
+    // Remember trust immediately, so keep-alive can finish a late connection even
+    // after the Connect page is closed. The pairing port is never a connect port.
+    if (job.pairedName) this.store.remember({ id: serviceId(job.pairedName), ip: job.ip, name: job.pairedName, autoReconnect: true });
+    job.deadline = Date.now() + this.connectionTimeoutMs;
+    this.update({ state: 'connecting', paired: true, error: null });
+    await this.connectPaired(job);
+  }
+
+  current(job) {
+    return this.job === job && !job.cancelled;
+  }
+
+  matchingDevice(job, devices) {
+    return devices.find((d) => d.state === 'device' &&
+      ((job.pairedName && /\._adb-tls-connect\._tcp\.?$/.test(d.serial) && serviceId(d.serial) === serviceId(job.pairedName)) || d.serial.startsWith(job.ip + ':')));
+  }
+
+  connected(job, device, svc) {
+    if (!this.current(job)) return;
+    clearTimeout(job.retryTimer);
+    const name = svc?.name || job.pairedName || (device.serial.includes('._adb-tls-connect._tcp')
+      ? device.serial.replace(/\._adb-tls-connect\._tcp\.?$/, '') : null);
+    const address = svc?.address || (device.serial.startsWith(job.ip + ':') ? device.serial : null);
+    if (name) this.store.remember({ id: serviceId(name), ip: job.ip, name, ...(address ? { address } : {}), autoReconnect: true });
+    this.update({ state: 'connected', address: address || device.serial, error: null });
+  }
+
+  // DeviceTracker also completes pairing when ADB connects outside this retry loop.
+  observeDevices(devices) {
+    const job = this.job;
+    if (!job?.public.paired || job.public.state === 'connected' || !this.current(job)) return;
+    const device = this.matchingDevice(job, devices);
+    if (device) this.connected(job, device);
+  }
+
+  async connectPaired(job) {
+    if (!this.current(job) || job.public.state === 'connected') return;
+    try {
+      const result = await this.connections.exclusive(async () => {
+        if (!this.current(job)) return null;
+        let devices = await this.connections.devices();
+        const svc = (await this.mdns()).find((s) => s.kind === 'connect' &&
+          ((job.pairedName && serviceId(s.name) === serviceId(job.pairedName)) || s.address.startsWith(job.ip + ':')));
+        if (!this.current(job) || job.public.state === 'connected') return null;
+        if (svc) {
+          await this.connections.connect(svc).catch(() => false);
+          devices = await this.connections.devices();
+        } else if (!this.matchingDevice(job, devices) && job.pairedName) {
+          // ADB may still resolve a known service while its discovery list is late.
+          await this.adb.run(['connect', `${job.pairedName}._adb-tls-connect._tcp`], { timeout: 5000 }).catch(() => '');
+          devices = await this.connections.devices();
+        }
+        const device = devices.find((d) => d.state === 'device' && svc && this.connections.matches(d, svc)) || this.matchingDevice(job, devices);
+        return device ? { device, svc } : null;
+      });
+      if (!this.current(job) || job.public.state === 'connected') return;
+      if (result) return this.connected(job, result.device, result.svc);
+    } catch { /* Retry transient discovery and ADB failures without re-pairing. */ }
+    if (!this.current(job) || job.public.state === 'connected') return;
+    if (Date.now() >= job.deadline) {
+      return this.update({ state: 'connection-failed', error: 'Pairing succeeded, but the connection timed out. Retry connection.' });
     }
-    if (job.cancelled || this.job !== job) return;
-    this.update({ state: 'paired', error: 'Pairing succeeded. Enter the IP address and port from the main Wireless debugging screen below to finish connecting.' });
+    job.retryTimer = setTimeout(() => this.connectPaired(job), this.retryMs);
+    job.retryTimer.unref?.();
+  }
+
+  async retryConnection() {
+    const job = this.job;
+    if (!job?.public.paired) throw new Error('Pair a phone first.');
+    if (job.public.state === 'connected' || job.public.state === 'connecting') return this.state();
+    clearTimeout(job.retryTimer);
+    job.deadline = Date.now() + this.connectionTimeoutMs;
+    this.update({ state: 'connecting', error: null });
+    await this.connectPaired(job);
+    return this.state();
   }
 
   cancel() {
-    if (this.job) this.job.cancelled = true;
+    if (this.job) { this.job.cancelled = true; clearTimeout(this.job.retryTimer); }
     this.job = null;
   }
 }

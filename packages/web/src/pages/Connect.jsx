@@ -8,11 +8,11 @@ import { Logo, Icon } from '../components/bits.jsx';
 const STEPS = [
   { key: 'waiting', title: 'Scan the code' },
   { key: 'found', title: 'Phone found' },
-  { key: 'pairing', title: 'Pairing, no cable needed' },
+  { key: 'pairing', title: 'Pairing' },
   { key: 'connecting', title: 'Connecting to the phone' },
-  { key: 'connected', title: 'Connected. Ready for Unity Build and Run' },
+  { key: 'connected', title: 'Connected' },
 ];
-const ORDER = { waiting: 0, found: 1, pairing: 2, connecting: 3, paired: 3, connected: 4 };
+const ORDER = { waiting: 0, found: 1, pairing: 2, connecting: 3, paired: 3, 'connection-failed': 3, connected: 4 };
 
 function useQrSvg(text) {
   const [svg, setSvg] = useState('');
@@ -43,12 +43,12 @@ export function Connect() {
   }, [online, status?.adb]);
 
   const step = ORDER[pair.state] ?? 0;
-  const failed = pair.state === 'failed';
-  const caption = failed || pair.state === 'paired' ? pair.error
+  const failed = pair.state === 'failed' || pair.state === 'connection-failed';
+  const caption = failed ? pair.error
     : pair.state === 'found' ? `Found a phone at ${pair.address}`
       : pair.state === 'pairing' ? 'Pairing…'
         : pair.state === 'connected' ? 'Done. You can close this tab; the phone stays connected.'
-          : pair.state === 'connecting' ? 'Paired successfully. Connecting to the phone...'
+          : pair.state === 'connecting' || pair.state === 'paired' ? 'Paired successfully. Connecting to the phone...'
           : 'Waiting for your phone';
 
   const pairWithCode = async (ev) => {
@@ -119,7 +119,7 @@ export function Connect() {
             ))}
           </div>
 
-          <details className="card" style={{ marginTop: 22 }} open={failed || undefined}>
+          <details className="card" style={{ marginTop: 22 }} open={pair.state === 'failed' || undefined}>
             <summary style={{ cursor: 'pointer', padding: '16px 20px', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               Can't scan? Use a pairing code <span className="dim mono" style={{ fontSize: 12 }}>MANUAL</span>
             </summary>
@@ -138,7 +138,7 @@ export function Connect() {
             </form>
           </details>
 
-          <details className="card" style={{ marginTop: 14 }} open={pair.state === 'paired' || undefined}>
+          <details className="card" style={{ marginTop: 14 }}>
             <summary style={{ cursor: 'pointer', padding: '16px 20px', fontWeight: 700 }}>Already paired? Connect by address</summary>
             <form onSubmit={connectPaired} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 20px 20px' }}>
               <p className="mute" style={{ margin: 0, fontSize: 13.5 }}>Use the IP address and port on the main <strong>Wireless debugging</strong> screen, outside the pairing dialog. No pairing code is needed.</p>
@@ -175,9 +175,9 @@ export function Connect() {
             </div>
           </div>
           <div style={{ fontSize: 15.5, textAlign: 'center', color: failed ? 'var(--bad)' : 'var(--text)', maxWidth: 380 }}>{caption}</div>
-          {failed && <button className="btn" onClick={() => api('pair/qr', { method: 'POST' })}>Try again with a new code</button>}
+          {pair.state === 'failed' && <button className="btn" onClick={() => api('pair/qr', { method: 'POST' }).catch((err) => setManualError(err.message))}>Try again with a new code</button>}
+          {pair.state === 'connection-failed' && <button className="btn" onClick={() => api('pair/retry', { method: 'POST' }).catch((err) => setManualError(err.message))}>Retry connection</button>}
           {pair.state === 'connected' && <button className="btn btn-warm" onClick={() => setView('home')}>Back home</button>}
-          <div className="dim" style={{ fontSize: 13.5, textAlign: 'center', maxWidth: 340, lineHeight: 1.55 }}>Phone and computer need the same Wi-Fi. Office networks sometimes block this; a phone hotspot works.</div>
         </section>
       </div>
       </>}

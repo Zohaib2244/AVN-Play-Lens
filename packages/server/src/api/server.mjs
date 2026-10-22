@@ -233,6 +233,7 @@ export function createServer(ctx) {
       if (!ctx.pairing) return send(res, 503, { error: 'adb not found' });
       if (id === 'qr') return send(res, 200, ctx.pairing.startQr());
       if (id === 'cancel') { ctx.pairing.cancel(); return send(res, 200, { ok: true }); }
+      if (id === 'retry') return send(res, 200, await ctx.pairing.retryConnection());
       if (id === 'code') {
         const { address, code } = await readJson(req);
         if (!ADDRESS_RE.test(address || '') || !/^\d{6}$/.test(String(code || '').replace(/\s/g, ''))) return send(res, 400, { error: 'Use address:port and the 6-digit code from the phone.' });

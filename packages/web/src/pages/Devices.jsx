@@ -42,7 +42,7 @@ function DeviceCard({ d, onOpen, children }) {
         ) : d.replay ? (
           <button className="btn btn-sm" onClick={onOpen}>Use replay device</button>
         ) : (
-          <span className="tag tag-ok"><span className="dot ok" />Ready for Unity Build and Run</span>
+          <span className="tag tag-ok"><span className="dot ok" />Connected</span>
         )}
         {!hint && <button className="linkish" style={{ marginLeft: 'auto' }} aria-expanded={details} onClick={() => setDetails(!details)}>{details ? 'Hide details' : 'Details'}</button>}
       </div>

@@ -1,118 +1,45 @@
 import { useEffect, useState } from 'react';
+import { Button, ConfirmDelete, Drawer, ErrorPanel, Icon, PageHead, Panel, Tag } from '@avn/ui';
 import { useApp, deviceName, stateHint } from '../state.jsx';
 import { api } from '../api.js';
-import { PageHead } from '../components/bits.jsx';
 import { useProfile, DeviceRows } from '../components/DeviceProfile.jsx';
 import { SkeletonRows } from '../components/ui.jsx';
-function PhoneGlyph({ color = '#84C9B9' }) {
-  return (
-    <svg width="28" height="28" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="2" y="0" width="4" height="8" fill="#3A2F27" /><rect x="2.5" y="1" width="3" height="5" fill={color} /><rect x="3.5" y="6.8" width="1" height=".6" fill="#9A8B76" />
-    </svg>
-  );
-}
 
 function DeviceDetails({ serial }) {
   const { profile, error } = useProfile(serial, null);
-  if (error) return <div className="dim" style={{ fontSize: 13.5 }}>Couldn't read the phone: {error}</div>;
-  if (!profile) return <div style={{ fontSize: 13.5 }}><SkeletonRows rows={6} /></div>;
-  return <div style={{ fontSize: 13.5 }}><DeviceRows d={profile.device} /></div>;
+  return error ? <p className="badc">Could not read this device. {error}</p> : profile ? <DeviceRows d={profile.device} /> : <SkeletonRows rows={6} />;
 }
-
-function DeviceCard({ d, onOpen, children }) {
-  const [details, setDetails] = useState(false);
-  const hint = stateHint(d);
-  const transport = d.replay ? 'Replay' : d.transport === 'wifi' ? 'Wi-Fi' : 'USB';
-  const meta = d.replay
-    ? 'Plays a saved log, no phone needed'
-    : [d.info?.android && `Android ${d.info.android}`, d.info?.battery != null && `battery ${d.info.battery}%`].filter(Boolean).join(' · ') || d.serial;
-  return (
-    <div className="card devcard">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <PhoneGlyph color={d.replay ? '#B7A7E8' : hint ? '#5A4A3C' : '#84C9B9'} />
-        <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 17, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>{deviceName(d)}</span>
-          <span className="mono dim" style={{ display: 'block', fontSize: 12.5, marginTop: 2 }}>{meta}</span>
-        </span>
-        <span className="tag tag-plain">{transport}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        {hint ? (
-          <span className="tag tag-warn" style={{ whiteSpace: 'normal', textTransform: 'none', letterSpacing: 0, fontSize: 12.5 }}>{hint}</span>
-        ) : d.replay ? (
-          <button className="btn btn-sm" onClick={onOpen}>Use replay device</button>
-        ) : (
-          <span className="tag tag-ok"><span className="dot ok" />Connected</span>
-        )}
-        {!hint && <button className="linkish" style={{ marginLeft: 'auto' }} aria-expanded={details} onClick={() => setDetails(!details)}>{details ? 'Hide details' : 'Details'}</button>}
-      </div>
-      {details && <DeviceDetails serial={d.serial} />}
-      {children}
-    </div>
-  );
-}
-
 function savedPhoneFor(d, saved) {
-  if (d.transport !== 'wifi') return null;
-  return saved.find((s) => d.serial === s.address || d.serial.startsWith(`${s.id}-`) ||
-    (!s.address && d.serial.startsWith(`${s.ip}:`)));
+  return d.transport === 'wifi' ? saved.find((s) => d.serial === s.address || d.serial.startsWith(`${s.id}-`) || (!s.address && d.serial.startsWith(`${s.ip}:`))) : null;
 }
-
 function WifiControls({ saved, connected, onChange }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [unpair, setUnpair] = useState(false);
   const manage = async (action) => {
-    setBusy(true);
-    setError('');
-    try {
-      await api(`devices/saved/${encodeURIComponent(saved.id)}/${action}`, { method: 'POST' });
-      await onChange(action);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+    setBusy(true); setError('');
+    try { await api(`devices/saved/${encodeURIComponent(saved.id)}/${action}`, { method: 'POST' }); setUnpair(false); await onChange(action); }
+    catch (err) { setError(err.message); } finally { setBusy(false); }
   };
-  return (
-    <div style={{ borderTop: '1px solid #2E2620', paddingTop: 12 }}>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="btn btn-sm" disabled={busy} onClick={() => manage(connected ? 'disconnect' : 'reconnect')}>
-          {busy ? 'Working…' : connected ? 'Disconnect' : 'Reconnect'}
-        </button>
-        <button className="linkish" disabled={busy} aria-expanded={unpair} onClick={() => setUnpair(!unpair)}>Forget / unpair…</button>
-        <span className="dim" style={{ fontSize: 12.5 }}>{saved.autoReconnect === false ? 'Auto-reconnect paused' : 'Auto-reconnect on'}</span>
-      </div>
-      {unpair && <div style={{ fontSize: 13.5, lineHeight: 1.6, marginTop: 12 }}>
-        <p style={{ margin: '0 0 10px' }}>To fully unpair, on your phone open <strong>Developer options → Wireless debugging → Paired devices</strong>, select this computer, then tap <strong>Forget</strong>. Android requires this step on the phone.</p>
-        <p className="mute" style={{ margin: '0 0 12px' }}>Forgetting here disconnects Wi-Fi and removes the phone from PlayLens. Android may reconnect it until you forget this computer on the phone.</p>
-        <button className="btn btn-sm" disabled={busy} onClick={() => manage('forget')}>Disconnect and forget in PlayLens</button>
-      </div>}
-      {error && <p role="alert" style={{ color: 'var(--bad)', fontSize: 13.5, marginBottom: 0 }}>{error}</p>}
-    </div>
-  );
+  return <><div className="pl-device-actions row-wrap"><Button size="sm" loading={busy} loadingLabel="Working…" onClick={() => manage(connected ? 'disconnect' : 'reconnect')}>{connected ? 'Disconnect' : 'Reconnect'}</Button><Button size="sm" variant="ghost" onClick={() => setUnpair(true)}>Forget device…</Button><span className="pl-page-note">Auto-reconnect {saved.autoReconnect === false ? 'paused' : 'on'}</span></div>{error && <p className="badc" role="alert">{error}</p>}<ConfirmDelete open={unpair} onClose={() => setUnpair(false)} onConfirm={() => manage('forget')} name={saved.label || saved.id} title="Forget this device?" busy={busy} consequences={['Its saved Wi-Fi connection in PlayLens. Also forget this computer in your phone’s Wireless debugging → Paired devices to fully revoke pairing.']} confirmLabel="Disconnect & forget" /></>;
 }
-
-
 export function Devices() {
   const { devices, serial, selectDevice, setView, online } = useApp();
   const [saved, setSaved] = useState([]);
   const [error, setError] = useState('');
+  const [details, setDetails] = useState(null);
   const [notice, setNotice] = useState(false);
-  const load = async (action) => { try { setSaved(await api('devices/saved')); if (action === 'forget') setNotice(true); } catch (e) { setError(e.message); } };
+  const load = async (action) => { try { setSaved(await api('devices/saved')); setError(''); if (action === 'forget') setNotice(true); } catch (e) { setError(e.message); } };
   useEffect(() => { if (online) load(); }, [online, devices]);
-  return <main className="main"><PageHead title="Devices" sub="Manage phone connections. Adding a device does not start tracking."><button className="btn btn-warm" onClick={() => setView('connect')}>Connect another device</button></PageHead>
-    {notice && <div className="card" style={{ padding: 20 }}>Forgotten in PlayLens. To fully unpair, on your phone go to Developer options → Wireless debugging → Paired devices, select this computer and tap Forget.</div>}
-    {error && <p role="alert">{error}</p>}
-    <div className="grid-cards">{devices.map((d) => {
-      const remembered = savedPhoneFor(d, saved);
-      return <DeviceCard key={d.serial} d={d} onOpen={() => selectDevice(d)}>
-        <button className="btn btn-sm" disabled={d.serial === serial || d.state !== 'device'} onClick={() => selectDevice(d)}>{d.serial === serial ? 'Selected device' : 'Use this device'}</button>
-        {remembered && <WifiControls saved={remembered} connected onChange={load} />}
-      </DeviceCard>;
-    })}
-    {saved.filter((s) => !devices.some((d) => savedPhoneFor(d, [s]))).map((s) => <div className="card devcard" key={s.id}><strong>{s.label || s.id}</strong><span className="dim">Remembered · disconnected</span><WifiControls saved={s} connected={false} onChange={load} /></div>)}
-    </div>
-    {!devices.length && !saved.length && <div className="card empty">No devices yet. Connect by USB or pair over Wi-Fi.</div>}
+  return <main className="content">
+    <PageHead title="Devices" description="Your Android connections. Select a device, then open a game." actions={<Button variant="primary" onClick={() => setView('connect')}><Icon name="plus" />Connect device</Button>} />
+    {notice && <div className="banner" role="status">Device forgotten in PlayLens. Forget this computer in the phone’s Wireless debugging settings to fully unpair.</div>}
+    {error && <ErrorPanel title="Could not load remembered devices" message={error} onRetry={load} />}
+    <div className="pl-device-grid">{devices.map((d) => {
+      const hint = stateHint(d), remembered = savedPhoneFor(d, saved);
+      return <Panel key={d.serial} title={deviceName(d)} subtitle={d.replay ? 'Simulated device · saved log replay' : [d.info?.android && `Android ${d.info.android}`, d.info?.battery != null && `${d.info.battery}% battery`].filter(Boolean).join(' · ') || d.serial} actions={<Tag kind={hint ? 'warn' : d.replay ? 'plain' : 'ok'}>{hint ? 'Needs attention' : d.replay ? 'Replay' : 'Connected'}</Tag>}><div className="pb pl-setup-panel"><div className="row-wrap"><span className="pill">{d.replay ? 'Demo' : d.transport === 'wifi' ? 'Wi-Fi' : 'USB'}</span><span className="mono dim pl-page-note">{d.serial}</span></div>{hint && <p className="warnc">{hint}</p>}<div className="row-wrap"><Button disabled={d.serial === serial || d.state !== 'device'} onClick={() => selectDevice(d)}>{d.serial === serial ? 'Selected device' : 'Use this device'}</Button><Button variant="ghost" onClick={() => setDetails(d)}>Device details <Icon name="arrow" /></Button></div>{remembered && <WifiControls saved={remembered} connected onChange={load} />}</div></Panel>;
+    })}{saved.filter((s) => !devices.some((d) => savedPhoneFor(d, [s]))).map((s) => <Panel key={s.id} title={s.label || s.id} actions={<Tag kind="plain">Disconnected</Tag>}><div className="pb"><WifiControls saved={s} connected={false} onChange={load} /></div></Panel>)}</div>
+    {!devices.length && !saved.length && <Panel><div className="pl-empty"><Icon name="link" size={28} /><h2>No devices connected.</h2><p className="muted">Plug in a USB cable or pair your phone over Wi-Fi.</p><Button onClick={() => setView('connect')}>Connect your first device</Button></div></Panel>}
+    <Drawer open={!!details} onClose={() => setDetails(null)} title={details ? deviceName(details) : 'Device details'} subtitle={details?.serial}>{details && <DeviceDetails serial={details.serial} />}</Drawer>
   </main>;
 }

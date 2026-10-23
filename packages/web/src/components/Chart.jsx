@@ -95,7 +95,7 @@ export function Chart({ data, field, color = 'var(--warm)', unit = '', fixedMax,
         {!vals.length && <text x={L + w / 2} y={T + h / 2} textAnchor="middle" className="axis">no data yet</text>}
       </svg>
       {hover && hover[field] != null && (
-        <div className="tip" style={{ left: Math.min(Math.max(x(hover.t) - 50, 0), width - 110), top: 0 }}>
+        <div className="chart-tip" style={{ left: Math.min(Math.max(x(hover.t) - 50, 0), width - 110), top: 0 }}>
           <b>{format(hover[field])}{unit}</b> <span className="dim">at {mmss((hover.t - (start ?? t0)) / 1000)}</span>
         </div>
       )}

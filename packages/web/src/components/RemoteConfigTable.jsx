@@ -8,12 +8,12 @@ export function RemoteConfigTable({ rc, showInLogs }) {
     ...v, source: v.source || (v.from === 'cache' ? 'Cache' : rc?.sources?.[v.name]) || 'Unknown',
   }));
   const rows = variables.filter((v) => !search || `${v.name} ${v.type} ${v.source}`.toLowerCase().includes(search.toLowerCase()));
-  return <section className="card" style={{ overflow: 'hidden', minWidth: 0 }} aria-label="Firebase Remote Config variables">
-    <div className="report-heading">
+  return <section className="panel" style={{ overflow: 'hidden', minWidth: 0 }} aria-label="Firebase Remote Config variables">
+    <div className="ph report-heading">
       <div><h2>Config values</h2><p className="mute">{rc?.fetch ? `Fetch: ${rc.fetch.lastFetchStatus || 'reported'}${rc.fetch.ts ? ` · ${clock(rc.fetch.ts, false)}` : ''}` : 'Waiting for a fetch'} · {variables.filter((v) => v.hasValue).length} keys logged</p></div>
       <input className="input" aria-label="Filter Remote Config variables" placeholder="Filter variables…" value={search} onChange={(e) => setSearch(e.target.value)} />
     </div>
-    <div className="table-scroll"><table className="verification-table"><thead><tr><th>Variable / field</th><th>Value</th><th>Data type</th><th>Source</th><th>Time / evidence</th></tr></thead>
+    <div className="t-wrap"><table className="t verification-table"><thead><tr><th>Variable / field</th><th>Value</th><th>Data type</th><th>Source</th><th>Time / evidence</th></tr></thead>
       <tbody>{rows.map((v) => <tr key={v.name}>
         <td className="mono" style={{ paddingLeft: v.parent ? 28 : undefined }}>{v.name}</td>
         <td className="mono rc-value">{!v.hasValue ? <span className="dim">Waiting for a value</span> : v.value !== null && typeof v.value === 'object' ? <details><summary>{Array.isArray(v.value) ? `${v.value.length} items` : `${Object.keys(v.value).length} fields`}</summary><pre>{JSON.stringify(v.value, null, 2)}</pre></details> : String(v.value ?? '').length > 160 ? <details><summary>{String(v.value).slice(0, 120)}…</summary><pre>{String(v.value)}</pre></details> : String(v.value)}{v.truncated && <div className="tag tag-warn">Value incomplete in game log</div>}</td>

@@ -2,24 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp, deviceName, clock } from '../state.jsx';
 import { api } from '../api.js';
 import { PageHead, Check, Lattice } from '../components/bits.jsx';
-import { Menu, LiveBars, Skeleton, Spinner } from '../components/ui.jsx';
+import { Menu, Disclosure, Skeleton, Spinner } from '../components/ui.jsx';
 import { useAppAction } from './Logs.jsx';
 import { FirebaseEvents, EVENT_CHECK as CHECK } from '../components/FirebaseEvents.jsx';
+import { Button, Panel, Pipeline, StatusStrip, Tag } from '@avn/ui';
 
 function Stepper({ step, labels }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 30 }} role="list" aria-label="Setup steps">
-      {labels.map((label, i) => (
-        <div key={label} style={{ display: 'contents' }}>
-          {i > 0 && <span className={`sseg${step > i ? ' on' : ''}`}><i /></span>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} role="listitem">
-            <span className={`snode${i + 1 < step ? ' done' : i + 1 === step ? ' act' : ''}`}><span className="n mono">{i + 1}</span><span className="chk"><Check size={16} /></span></span>
-            <span className={`slab${i + 1 === step ? ' on' : ''}`}>{label}</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <Pipeline live={false} steps={labels.map((label, i) => ({ label, detail: i + 1 < step ? 'Done' : i + 1 === step ? 'Current step' : 'Next', state: i + 1 < step ? 'ok' : 'wait' }))} />;
 }
 export { Stepper };
 
@@ -57,8 +46,8 @@ export function FirebaseSetup() {
   };
   const restart = async () => {
     setBusy(true);
-    await appAction('restart');
-    setRestarted(true);
+    const success = await appAction('restart');
+    if (success) setRestarted(true);
     setBusy(false);
   };
 
@@ -66,93 +55,28 @@ export function FirebaseSetup() {
   const recent = (fb?.rows ?? []).filter((r) => r.sdk === 'FA' && !r.missing).slice(0, 3);
   const canNext = step === 1 ? debugOn : step === 2 ? restarted || replay : false;
 
-  return (
-    <main className="main" style={{ alignItems: 'center', paddingTop: 52 }}>
-      <div style={{ width: '100%', maxWidth: 760 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px 16px' }}>
-          <span className="eyebrow">Firebase events · setup</span>
-          <button className="linkish" onClick={() => setView('firebase')}>Already set up? Skip to events</button>
-        </div>
-        <h1 className="setup-title">Let Firebase talk to you</h1>
-        <p className="mute" style={{ margin: '0 0 34px', fontSize: 16, lineHeight: 1.6, maxWidth: 600 }}>
-          Firebase only writes its events to the phone's log in debug mode. Three steps, about 20 seconds. The plugin's own lines then double-check that nothing goes missing.
-        </p>
-        <Stepper step={step} labels={['Debug mode', 'Restart game', 'Listen']} />
-
-        <div className="card setup-card">
-          {step === 1 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Turn on debug mode</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>Only for {pkg}, only on {deviceName(device)}. It stays on until you turn it off from the events screen.</p>
-              <span className="eyebrow" style={{ marginBottom: 8 }}>What this runs</span>
-              <div className="cmd">{commands.map((c) => <div key={c}>{c}</div>)}</div>
-              <div style={{ marginTop: 'auto', paddingTop: 22, minHeight: 44, display: 'flex', alignItems: 'center' }}>
-                {debugOn
-                  ? <span className="tag tag-ok" style={{ fontSize: 12.5, padding: '8px 12px' }}>Debug mode on for {pkg}</span>
-                  : <button className="btn btn-warm" style={{ height: 44 }} onClick={turnOn} disabled={busy || !pkg}>{busy ? <><Spinner />Turning on…</> : 'Turn on debug mode'}</button>}
-              </div>
-            </div>
-          )}
-          {step === 2 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Restart the game</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>Firebase reads the setting when the game starts. You lose the current play session, not your saved progress.</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, border: '1px solid var(--line)', borderRadius: 14, padding: '16px 18px', background: 'var(--well)', maxWidth: 540 }}>
-                <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <span className="mono" style={{ display: 'block', fontSize: 15 }}>{pkg}</span>
-                  <span className="dim" style={{ display: 'block', fontSize: 13, marginTop: 3 }}>{deviceName(device)}</span>
-                </span>
-                <span className={`tag ${stream.running || replay ? 'tag-ok' : 'tag-plain'}`}>{replay ? 'Replay' : stream.running ? (restarted ? 'Running · new process' : 'Running') : 'Not running'}</span>
-              </div>
-              <div style={{ marginTop: 'auto', paddingTop: 22, minHeight: 44, display: 'flex', alignItems: 'center' }}>
-                {replay ? <span className="dim">The replay device can't be restarted; go on to the next step.</span>
-                  : restarted ? <span className="tag tag-ok" style={{ fontSize: 12.5, padding: '8px 12px' }}>Restarted</span>
-                    : <button className="btn btn-warm" style={{ height: 44 }} onClick={restart} disabled={busy}>{busy ? <><Spinner />Restarting…</> : 'Restart the game'}</button>}
-              </div>
-            </div>
-          )}
-          {step === 3 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Listening</h2>
-              <p className="mute" style={{ margin: '0 0 18px', fontSize: 15, lineHeight: 1.6 }}>Play for a moment. Events appear as Firebase logs them.</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10 }}>
-                <Lattice />
-                <span style={{ fontSize: 15 }}><span className="mono" style={{ color: 'var(--warm)' }}>{caught}</span> events logged by Firebase so far</span>
-              </div>
-              <div style={{ maxWidth: 560, minHeight: 126 }}>
-                {recent.map((e) => (
-                  <div key={e.id} className="rise" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: '1px solid var(--line-soft)', fontSize: 14.5, animationDuration: '.45s' }}>
-                    <span className="tag sdk-FA">FA</span>
-                    <span className="mono">{e.name}</span>
-                    <span className={`tag ${CHECK[e.check][1]}`} style={{ marginLeft: 'auto' }}>{CHECK[e.check][0]}</span>
-                  </div>
-                ))}
-                {!recent.length && <div className="dim" style={{ fontSize: 14 }}>Nothing yet. If this stays empty after you play, restart the game once more.</div>}
-              </div>
-              <div style={{ marginTop: 'auto', paddingTop: 20 }}>
-                <button className="btn btn-warm" style={{ height: 44 }} onClick={() => setView('firebase')}>Open Firebase events</button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, minHeight: 44 }}>
-          {step > 1 ? <button className="btn" onClick={() => setStep(step - 1)}>Back</button> : <span />}
-          {step < 3 && <button className="btn btn-warm" onClick={() => setStep(step + 1)} disabled={!canNext}>Next</button>}
-        </div>
-      </div>
-    </main>
-  );
+  return <main className="content">
+    <PageHead title="Firebase setup" sub={`Enable event logging for ${pkg} on ${deviceName(device)}.`}><Button onClick={() => setView('firebase')}>Back to events</Button></PageHead>
+    <Stepper step={step} labels={['Debug mode', 'Restart game', 'Listen']} />
+    <Panel title={['Turn on debug mode', 'Restart the game', 'Listen for events'][step - 1]}><div className="pb pl-setup-panel">
+      {step === 1 && <><p className="muted">Firebase debug mode applies only to this package on this device. Turn it off from the events screen when you finish.</p>{commands.length > 0 && <details><summary>View device commands</summary><pre className="cmd">{commands.join('\n')}</pre></details>}{debugOn ? <Tag kind="ok">Debug mode enabled</Tag> : <Button variant="primary" loading={busy} loadingLabel="Enabling…" disabled={!pkg} onClick={turnOn}>Enable debug mode</Button>}</>}
+      {step === 2 && <><p className="muted">Firebase reads this setting when the game starts. Restarting ends the current play session and keeps your saved progress.</p><div className="row-wrap"><span className="mono">{pkg}</span><Tag kind={replay ? 'plain' : stream.running ? 'ok' : 'plain'}>{replay ? 'Demo replay' : stream.running ? 'Running' : 'Not running'}</Tag></div>{replay ? <p className="muted">Replay cannot restart a phone. Continue to listen to the saved log.</p> : restarted ? <Tag kind="done">Game restarted</Tag> : <Button variant="primary" loading={busy} loadingLabel="Restarting…" onClick={restart}>Restart game</Button>}</>}
+      {step === 3 && <><div className="status-strip"><Tag kind={caught ? 'ok' : 'info'}>{caught ? 'Events received' : 'Listening'}</Tag><span>{caught} Firebase events in this step</span></div><p className="muted">Play a level. Events appear when Firebase records them on this device.</p><div className="t-wrap"><table className="t"><thead><tr><th>Event</th><th>Evidence</th></tr></thead><tbody>{recent.map((e) => <tr key={e.id}><td className="mono">{e.name}</td><td><span className={`tag ${CHECK[e.check][1]}`}>{CHECK[e.check][0]}</span></td></tr>)}</tbody></table></div>{!recent.length && <p className="muted">No events yet. Keep the game open and tracking active.</p>}<Button variant="primary" onClick={() => setView('firebase')}>Open Firebase events</Button></>}
+    </div></Panel>
+    <div className="row-wrap">{step > 1 && <Button onClick={() => setStep(step - 1)}>Back</Button>}{step < 3 && <Button disabled={!canNext} onClick={() => setStep(step + 1)}>Continue <span aria-hidden="true">→</span></Button>}</div>
+  </main>;
 }
 
 export function Firebase() {
-  const { monitor, device, pkg, serial, send, setView, showInLogs, showToast } = useApp();
+  const { monitor, device, pkg, serial, send, setView, showInLogs, showToast, gameInventory } = useApp();
   const fb = monitor?.firebase;
+  const installed = gameInventory.serial === serial ? gameInventory.games.find((g) => g.packageId === pkg)?.installed : undefined;
+  if (!device || installed === false) return <main className="content"><PageHead title="Firebase events" /><Panel><div className="pl-empty"><h2>{!device ? 'No device connected.' : 'This game is not installed.'}</h2><p className="muted">Open an installed build to capture its Firebase events.</p><Button onClick={() => setView('game')}>Open game controls</Button></div></Panel></main>;
   if (!fb) {
     return (
-      <main className="main">
+      <main className="content">
         <PageHead title="Firebase events" />
-        <div className="card" style={{ overflow: 'hidden' }} aria-busy="true" aria-label="Loading events">
+        <div className="panel" style={{ overflow: 'hidden' }} aria-busy="true" aria-label="Loading events">
           {Array.from({ length: 7 }, (_, i) => (
             <div key={i} className="erow" style={{ cursor: 'default' }}>
               <Skeleton w={70} h={12} /><Skeleton w={30} h={18} /><Skeleton w={`${50 + (i * 13) % 40}%`} h={14} /><Skeleton w="70%" h={14} /><Skeleton w={100} h={18} /><span />
@@ -173,44 +97,20 @@ export function Firebase() {
     }
   };
 
-  return (
-    <main className="main">
-      <PageHead
-        title="Firebase events"
-        sub={<>{pkg} on {deviceName(device)} · {fb.counts.firebase} logged by Firebase{fb.counts.sent ? ` · ${fb.counts.sent} handed to SDK` : ''}{fb.counts.notLogged ? <> · <span style={{ color: 'var(--warn)' }}>{fb.counts.notLogged} without a matching Firebase log</span></> : null}</>}
-      >
-        {fb.debug?.on && (fb.receiving ? <LiveBars label="Listening" /> : <span className="live paused">{fb.diagnostics?.upload?.state === 'successful' ? 'Upload confirmed' : fb.diagnostics?.lines ? 'Firebase SDK active' : 'Waiting for SDK activity'}</span>)}
-        <Menu items={[
-          { label: 'Run setup again', onClick: () => setView('firebase-setup') },
-          { label: 'Turn off Firebase debug mode', onClick: turnOff, hidden: device?.replay, danger: true },
-        ]} />
-      </PageHead>
-
-      {!fb.debug?.on && (
-        <div className="card" style={{ padding: '14px 20px', borderColor: '#5a4a1e', background: '#221d14', fontSize: 14.5 }}>
-          <b style={{ color: 'var(--warn)' }}>Firebase debug mode is off,</b> <span className="mute">so Firebase isn't writing events to the log. </span>
-          <button className="linkish" onClick={() => setView('firebase-setup')}>Set it up</button>
-        </div>
-      )}
-
-      {fb.diagnostics?.upload && <section className="card" style={{ padding: '16px 22px' }} role="status">
-        <strong className={fb.diagnostics.upload.state === 'successful' ? 'okc' : 'warnc'}>{fb.diagnostics.upload.state === 'successful' ? 'Analytics upload succeeded' : 'Analytics upload failed'}</strong>
-        <span className="dim" style={{ marginLeft: 12 }}>{clock(fb.diagnostics.upload.ts, false)}</span>
-        <p className="mute" style={{ margin: '8px 0 0' }}>Google Play services reported this result for {pkg}. Events below come from Firebase logs and upload batches identified with this package.</p>
-        {fb.diagnostics.upload.entryId && <button className="linkish" style={{ marginTop: 8 }} onClick={() => showInLogs(fb.diagnostics.upload.entryId)}>Show upload log</button>}
-      </section>}
-
-      {fb.debug?.on && !fb.receiving && fb.diagnostics?.upload?.state !== 'successful' && <section className="card" style={{ padding: '18px 22px' }} role="status">
-        <strong>{fb.diagnostics?.lines ? 'Firebase SDK activity detected' : 'Waiting for Firebase SDK logs'}</strong>
-        <p className="mute" style={{ margin: '8px 0', lineHeight: 1.6 }}>{fb.diagnostics?.lines
-          ? `${fb.diagnostics.lines} SDK log lines captured${fb.diagnostics.collection === true ? '. Analytics collection is enabled' : fb.diagnostics.collection === false ? '. Analytics collection is disabled' : ''}${fb.diagnostics.dispatches ? `; ${fb.diagnostics.dispatches} event dispatch${fb.diagnostics.dispatches === 1 ? '' : 'es'} reported` : ''}. This SDK can log event details in Google Play services upload batches; they appear as the next batch is captured.`
-          : 'Debug mode is enabled. Restart the game with tracking active, then play a level. Earlier events are not backfilled.'}</p>
-        <p className="dim" style={{ margin: 0, fontSize: 13 }}>SDK handoff and local logging do not confirm delivery to Firebase. An ad blocker, Private DNS or VPN can prevent Analytics uploads.</p>
-        {fb.diagnostics?.issue && <p className="mono warnc" style={{ overflowWrap: 'anywhere', fontSize: 13 }}>{fb.diagnostics.issue}</p>}
-        <button className="linkish" style={{ marginTop: 12 }} onClick={() => setView('logs')}>Inspect game logs</button>
-      </section>}
-
-      <FirebaseEvents firebase={fb} showInLogs={showInLogs} />
-    </main>
-  );
+  return <main className="content">
+    <PageHead title="Firebase events" sub={`${pkg} on ${deviceName(device)}`}>
+      {!fb.debug?.on && <Button variant="primary" onClick={() => setView('firebase-setup')}>Set up event logging</Button>}
+      <Menu items={[{ label: 'Run setup again', onClick: () => setView('firebase-setup') }, { label: 'Turn off Firebase debug mode', onClick: turnOff, hidden: device?.replay }]} />
+    </PageHead>
+    <StatusStrip live={false} status={fb.receiving ? 'Receiving events' : fb.debug?.on ? 'Listening' : 'Debug mode off'} items={[`${fb.counts.firebase} Firebase logs`, `${fb.counts.sent || 0} handed to SDK`, device?.replay ? 'Simulated replay' : 'Current capture']} tag={<Tag kind={fb.receiving ? 'ok' : fb.debug?.on ? 'info' : 'warn'}>{fb.receiving ? 'Device evidence received' : fb.debug?.on ? 'Waiting for evidence' : 'Setup needed'}</Tag>} />
+    {!fb.debug?.on && <div className="banner">Enable debug mode and restart the game to capture Firebase event payloads. <button className="linkish" onClick={() => setView('firebase-setup')}>Open setup</button></div>}
+    {fb.counts.notLogged > 0 && <div className="banner">{fb.counts.notLogged} SDK handoffs have no matching Firebase payload. This does not confirm an upload failure.</div>}
+    <FirebaseEvents firebase={fb} showInLogs={showInLogs} />
+    <Disclosure id="firebase.diagnostics" title="SDK and upload diagnostics" hint={fb.diagnostics?.upload?.state === 'successful' ? 'Upload reported successful' : fb.diagnostics?.lines ? `${fb.diagnostics.lines} SDK log lines observed` : 'No upload confirmation received'}>
+      {fb.diagnostics?.upload && <div className="row-wrap"><Tag kind={fb.diagnostics.upload.state === 'successful' ? 'ok' : 'bad'}>{fb.diagnostics.upload.state === 'successful' ? 'Upload reported successful' : 'Upload reported failed'}</Tag><span className="mono dim">{clock(fb.diagnostics.upload.ts, false)}</span>{fb.diagnostics.upload.entryId && <Button size="sm" onClick={() => showInLogs(fb.diagnostics.upload.entryId)}>Show upload log</Button>}</div>}
+      <p className="muted">Device logs and SDK handoffs do not prove server delivery. Keep tracking active while you play; earlier events are not backfilled.</p>
+      {fb.diagnostics?.issue && <p className="warnc mono">{fb.diagnostics.issue}</p>}
+      <Button onClick={() => setView('logs')}>Inspect game logs</Button>
+    </Disclosure>
+  </main>;
 }

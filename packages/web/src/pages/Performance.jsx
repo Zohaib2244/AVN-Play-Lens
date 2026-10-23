@@ -2,6 +2,7 @@
 // graph below), one graph, and everything else tucked into "More details" and
 // "Phone and game build". Sampled by the server once a second.
 import { useMemo, useState } from 'react';
+import { Button, Panel } from '@avn/ui';
 import { useApp, deviceName } from '../state.jsx';
 import { PageHead, Lattice } from '../components/bits.jsx';
 import { Chart } from '../components/Chart.jsx';
@@ -24,17 +25,7 @@ function fpsTone(v, hz) {
 }
 
 function Tile({ id, label, value, unit, sub, tone, picked, onPick, loading }) {
-  return (
-    <button className="card pstat" aria-pressed={picked} onClick={() => onPick(id)} aria-label={`${label}: show graph`}>
-      <span className="eyebrow">{tone && <span className={`dot ${tone}`} style={{ marginRight: 7 }} />}{label}</span>
-      {loading
-        ? <><Skeleton w="55%" h={34} r={8} /><Skeleton w="75%" h={11} /></>
-        : <>
-          <span className="pval"><span className="px">{value}</span>{unit && <span className="punit">{unit}</span>}</span>
-          <span className="dim" style={{ fontSize: 12.5 }}>{sub}</span>
-        </>}
-    </button>
-  );
+  return <button className="kpi pl-metric" aria-pressed={picked} onClick={() => onPick(id)} aria-label={`${label}: show graph`}><span className="eyebrow">{label}</span>{loading ? <><Skeleton w="55%" h={28} /><Skeleton w="75%" h={11} /></> : <><span className="k-v">{value}{unit && <small>{unit}</small>}</span><span className="k-c">{tone && <span className={`tag ${tone}`}>{tone === 'ok' ? 'Normal' : tone === 'bad' ? 'High concern' : 'Needs a look'}</span>} {sub}</span></>}</button>;
 }
 
 function ChartSkeleton() {
@@ -46,7 +37,7 @@ function ChartSkeleton() {
 }
 
 export function Performance() {
-  const { device, pkg, serial, perf, perfSummary: s, perfVersion, monitor, stream } = useApp();
+  const { device, pkg, serial, perf, perfSummary: s, perfVersion, monitor, stream, gameInventory, setView } = useApp();
   const [win, setWin] = useState('120');
   const [metric, setMetric] = useState('fps');
   const appAction = useAppAction();
@@ -61,14 +52,12 @@ export function Performance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfVersion, win]);
 
-  if (!device || !pkg) {
+  const installed = gameInventory.serial === serial ? gameInventory.games.find((g) => g.packageId === pkg)?.installed : undefined;
+  if (!device || !pkg || installed === false) {
     return (
-      <main className="main">
+      <main className="content">
         <PageHead title="Performance" />
-        <div className="card empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <span>Pick a game first. Performance is measured for one game at a time.</span>
-          {device && <GamePicker />}
-        </div>
+        <Panel><div className="pl-empty"><h2>{installed === false ? 'This game is not installed.' : 'Choose a device and game.'}</h2><p className="muted">Performance is measured for one installed game at a time.</p><Button onClick={() => setView(pkg ? 'game' : 'home')}>{pkg ? 'Open game controls' : 'Open game library'}</Button></div></Panel>
       </main>
     );
   }
@@ -99,13 +88,13 @@ export function Performance() {
   const fpsNote = info.fps === 'no-layer' ? "Couldn't find the game's screen layer, so FPS isn't available (is the game in the foreground?). CPU, memory and temperature still work." : null;
 
   return (
-    <main className="main" style={{ gap: 20 }}>
+    <main className="content" style={{ gap: 20 }}>
       <PageHead title="Performance" sub={`${pkg} on ${deviceName(device)}${dur ? ` · ${dur} measured` : ''}`}>
-        {waitingGame ? <span className="live paused">Waiting for the game</span> : <LiveBars label="Sampling every second" />}
+        {waitingGame ? <span className="tag plain">Waiting for the game</span> : <LiveBars label="Sampling every second" />}
       </PageHead>
 
       {waitingGame && (
-        <div className="card" style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div className="panel" style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <Lattice />
           <span style={{ flex: '1 1 auto' }}><b>The game isn't running.</b> <span className="mute">Measuring starts as soon as it opens.</span></span>
           {!device.replay && !stream.running && <ActionButton className="btn btn-warm" onClick={() => appAction('launch')} busyLabel="Launching…">Launch game</ActionButton>}
@@ -113,22 +102,22 @@ export function Performance() {
       )}
 
       {failed && (
-        <div className="card" style={{ padding: '18px 22px', borderColor: '#6b2e27', background: '#2a1916' }}>
+        <div className="panel" style={{ padding: '18px 22px', borderColor: 'var(--bad)', background: 'var(--bad-soft)' }}>
           <b style={{ color: 'var(--bad)' }}>Couldn't read performance from the phone.</b>
           <span className="mono mute" style={{ display: 'block', fontSize: 13, marginTop: 6, overflowWrap: 'anywhere' }}>{info.error}</span>
           <span className="dim" style={{ display: 'block', fontSize: 13.5, marginTop: 6 }}>Check the phone is still connected. PlayLens keeps trying every second.</span>
         </div>
       )}
 
-      <div className="pstats">
+      <div className="kpis">
         <Tile id="fps" label="FPS" picked={metric === 'fps'} onPick={setMetric} loading={loading} value={info.fps === 'no-layer' ? 'n/a' : r0(last.fps)} sub={s?.lowFps != null ? `1% low ${r1(s.lowFps)}${hz ? ` · ${hz} Hz screen` : ''}` : 'waiting for frames'} tone={fpsTone(last.fps, hz)} />
         <Tile id="cpu" label="CPU" picked={metric === 'cpu'} onPick={setMetric} loading={loading} value={r0(last.cpu)} unit="%" sub={s?.cpu ? `avg ${r0(s.cpu.avg)}%` : '100% = one core'} />
         <Tile id="mem" label="Memory" picked={metric === 'mem'} onPick={setMetric} loading={loading} value={r0(last.mem)} unit="MB" sub={s?.mem ? `peak ${r0(s.mem.max)} MB` : 'includes graphics'} tone={s?.mem && ramGb ? (s.mem.max > ramGb * 1024 * 0.4 ? 'warn' : 'ok') : ''} />
         <Tile id="temp" label="Temperature" picked={metric === 'temp'} onPick={setMetric} loading={loading} value={r1(last.temp)} unit="°C" sub={last.thermal != null ? `throttling: ${THERMAL[last.thermal] ?? last.thermal}` : 'battery'} tone={last.thermal == null ? '' : last.thermal === 0 ? 'ok' : last.thermal <= 1 ? 'warn' : 'bad'} />
       </div>
 
-      <section className="card" style={{ padding: '16px 18px 10px', minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+      <section className="panel">
+        <div className="ph">
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: 16 }}>{c.title}</span>
             <span className="mono dim" style={{ fontSize: 12 }}>{c.right}</span>
@@ -137,14 +126,14 @@ export function Performance() {
             {WINDOWS.map(([k, label]) => <button key={k} aria-pressed={win === k} onClick={() => setWin(k)}>{label}</button>)}
           </div>
         </div>
-        {metric === 'fps' && fpsNote ? <div className="empty" style={{ padding: '70px 20px' }}>{fpsNote}</div>
+        <div className="pb">{metric === 'fps' && fpsNote ? <div className="empty" style={{ padding: '70px 20px' }}>{fpsNote}</div>
           : data.length < 2 ? (waitingGame || failed ? <div className="empty" style={{ padding: '70px 20px' }}>{waitingGame ? "The game isn't running, so there is nothing to measure yet." : 'No samples yet.'}</div> : <ChartSkeleton />)
-            : <Chart data={data} start={start} height={240} {...c.props} />}
+            : <Chart data={data} start={start} height={240} {...c.props} />}</div>
       </section>
 
       <Disclosure id="perf.more" title="More details" hint={s?.frames ? `Frame times · ${s.stutters} stutter${s.stutters === 1 ? '' : 's'} · GPU · garbage collection · battery` : 'Frame times, GPU, garbage collection, battery'}>
         <div className="pcharts">
-          <section className="card" style={{ padding: '16px 18px', minWidth: 0 }}>
+          <section className="panel" style={{ padding: '16px 18px', minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
               <span style={{ fontWeight: 700 }}>Frame times</span>
               <span className="mono dim" style={{ fontSize: 12 }}>{s?.frames ? `${s.frames.toLocaleString()} frames` : ''}</span>
@@ -166,7 +155,7 @@ export function Performance() {
               </>
             )}
           </section>
-          <section className="card" style={{ padding: '16px 18px 10px', minWidth: 0 }}>
+          <section className="panel" style={{ padding: '16px 18px 10px', minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontWeight: 700 }}>GPU</span>
               <span className="mono dim" style={{ fontSize: 12 }}>{info.gpu === 'unreadable' ? 'not readable on this phone' : s?.gpu ? `avg ${r0(s.gpu.avg)}% · peak ${r0(s.gpu.max)}%` : 'busy %'}</span>
@@ -176,7 +165,7 @@ export function Performance() {
               : data.length < 2 ? (waitingGame || failed ? <div className="empty" style={{ padding: '50px 10px' }}>No data yet.</div> : <ChartSkeleton />) : <Chart data={data} field="gpu" color="var(--info)" unit="%" start={start} fixedMax={100} />}
           </section>
         </div>
-        <section className="card" style={{ padding: '16px 22px 10px' }}>
+        <section className="panel" style={{ padding: '16px 22px 10px' }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>This session</div>
           {[
             ['Frame rate', s?.fps ? `avg ${r1(s.fps.avg)} · min ${r0(s.fps.min)} · max ${r0(s.fps.max)}` : '—'],
@@ -204,11 +193,11 @@ export function Performance() {
         hint={tnote ?? [profile?.device && [profile.device.model, profile.device.android && `Android ${profile.device.android}`, profile.device.ramGb && `${profile.device.ramGb} GB`].filter(Boolean).join(' · '), app?.versionName && `v${app.versionName}`].filter(Boolean).join(' · ')}
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
-          <section className="card" style={{ flex: '1 1 340px', minWidth: 0, padding: '16px 22px 10px' }}>
+          <section className="panel" style={{ flex: '1 1 340px', minWidth: 0, padding: '16px 22px 10px' }}>
             <div className="eyebrow" style={{ marginBottom: 6 }}>Phone</div>
             {profile?.device ? <DeviceRows d={profile.device} /> : <SkeletonRows rows={8} />}
           </section>
-          <section className="card" style={{ flex: '1 1 340px', minWidth: 0, padding: '16px 22px 10px' }}>
+          <section className="panel" style={{ flex: '1 1 340px', minWidth: 0, padding: '16px 22px 10px' }}>
             <div className="eyebrow" style={{ marginBottom: 6 }}>Game build</div>
             {app ? <AppRows a={app} engine={engine} /> : <SkeletonRows rows={6} />}
             {tnote && <div style={{ color: 'var(--warn)', fontSize: 13.5, padding: '10px 0 4px' }}>{tnote}</div>}

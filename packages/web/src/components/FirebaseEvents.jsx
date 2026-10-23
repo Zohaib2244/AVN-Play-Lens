@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Drawer } from '@avn/ui';
 import { clock } from '../state.jsx';
 import { eventMatches, eventOptions, eventTypes, formatGap, isFirebaseParameter, visibleParameters } from '../firebase-events.mjs';
 
@@ -55,8 +56,9 @@ export function FirebaseEvents({ firebase: fb, showInLogs }) {
   const hasByteBrew = (fb.counts?.byteBrew ?? 0) > 0 || fb.rows?.some((row) => row.sdk === 'BB');
   const clearFilters = () => { setName(''); setSdk('ALL'); setHideAuto(false); };
 
+  const selectedRow = rows.find((row) => row.id === open);
   return <section className="firebase-explorer" aria-label="Captured event explorer">
-    <div className="event-toolbar">
+    <div className="filters event-toolbar">
       <div className="seg" role="group" aria-label="Event views">
         <button aria-pressed={view === 'timeline'} onClick={() => setView('timeline')}>Event timeline</button>
         <button aria-pressed={view === 'dictionary'} onClick={() => setView('dictionary')}>Event dictionary ({allTypes.length})</button>
@@ -86,13 +88,13 @@ export function FirebaseEvents({ firebase: fb, showInLogs }) {
     {fb.catalog && fb.catalog.reduce((n, type) => n + type.count, 0) > (fb.rows ?? []).filter((row) => !row.missing).length && <p className="dim event-note">The timeline keeps the latest 500 rows. Dictionary statistics and filter counts cover the entire capture.</p>}
     {!fb.catalog && (fb.counts?.firebase ?? 0) > (fb.rows ?? []).filter((row) => row.sdk === 'FA' && !row.missing).length && <p className="dim event-note">This older capture has a partial event timeline. Statistics cover its saved event rows.</p>}
 
-    {view === 'dictionary' ? <div className="card event-dictionary">
-      <div className="event-dictionary-intro">
+    {view === 'dictionary' ? <div className="panel event-dictionary">
+      <div className="ph event-dictionary-intro">
         <h2 className="px">Event dictionary</h2>
         <p className="mute">Unique events observed in this capture, ordered by count. Unconfirmed plugin attempts are excluded. Average gap is the time between first and last occurrence divided by the number of gaps.</p>
       </div>
-      {!types.length ? <div className="empty">No logged events match these filters.</div> : <div className="table-scroll">
-        <table className="event-stats">
+      {!types.length ? <div className="empty">No logged events match these filters.</div> : <div className="t-wrap">
+        <table className="t event-stats">
           <thead><tr><th scope="col">Event</th><th scope="col">Count</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Avg. gap</th><th scope="col">Parameter names</th><th scope="col" aria-label="Actions" /></tr></thead>
           <tbody>{types.map((type) => {
             const params = type.params.filter((param) => showInternal || !isFirebaseParameter(param));
@@ -108,7 +110,7 @@ export function FirebaseEvents({ firebase: fb, showInLogs }) {
           })}</tbody>
         </table>
       </div>}
-    </div> : <div className="card" style={{ overflow: 'hidden' }}>
+    </div> : <div className="panel" style={{ overflow: 'hidden' }}>
       <div className="erow eyebrow" style={{ cursor: 'default', minHeight: 40, borderTop: 0 }}>
         <span>Time</span><span>From</span><span>Event</span><span>Parameters</span><span>Plugin check</span><span />
       </div>
@@ -131,22 +133,16 @@ export function FirebaseEvents({ firebase: fb, showInLogs }) {
             <span><span className={`tag ${checkClass}`}>{checkLabel}</span></span>
             <svg className="car" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
-          {isOpen && <div className="edetail">
-            <div className="event-parameters">
-              <div className="eyebrow" style={{ marginBottom: 8 }}>Parameters</div>
-              {params.map(([key, value]) => <div key={key} className="kv"><span className="mono mute">{key}{showInternal && isFirebaseParameter(key) && <span className="event-internal-label dim">Firebase</span>}</span><span className="mono">{String(value)}</span></div>)}
-              {!params.length && <div className="dim" style={{ fontSize: 14 }}>{row.sdk === 'BB' ? 'Values are not visible for ByteBrew.' : hidden ? 'No game parameters.' : 'No parameters.'}</div>}
-              {hidden > 0 && <div className="dim event-hidden">{hidden} Firebase {hidden === 1 ? 'parameter' : 'parameters'} hidden. Use “Show Firebase parameters” above to reveal them for all events.</div>}
-            </div>
-            <div className="event-evidence">
-              <span className={`tag ${checkClass}`}>{checkLabel}</span>
-              {WHY[row.check] && <div className="event-explanation mute">{WHY[row.check]}</div>}
-              {row.problems?.map((problem) => <div key={problem} className="event-explanation warnc">{problem}</div>)}
-              {row.entryId && showInLogs && <button className="btn btn-sm" onClick={() => showInLogs(row.entryId)}>Show in logs</button>}
-            </div>
-          </div>}
+
         </div>;
       })}
     </div>}
+    <Drawer open={!!selectedRow} onClose={() => setOpen(null)} title={selectedRow?.name || 'Event details'} subtitle={selectedRow ? `${selectedRow.sdk} · ${clock(selectedRow.ts)}` : undefined}>{selectedRow && <EventDetails row={selectedRow} showInternal={showInternal} showInLogs={showInLogs} />}</Drawer>
   </section>;
+}
+
+function EventDetails({ row, showInternal, showInLogs }) {
+  const params = visibleParameters(row.params, showInternal);
+  const [label, kind] = EVENT_CHECK[row.check] ?? [row.check, 'tag-plain'];
+  return <div className="pl-setup-panel"><span className={`tag ${kind}`}>{label}</span>{WHY[row.check] && <p className="muted">{WHY[row.check]}</p>}{row.problems?.map((problem) => <p className="warnc" key={problem}>{problem}</p>)}<div className="eyebrow">Parameters</div>{params.map(([key, value]) => <div className="kv" key={key}><span className="mono muted">{key}</span><span className="mono">{String(value)}</span></div>)}{!params.length && <p className="muted">{row.sdk === 'BB' ? 'Parameter values are unavailable for ByteBrew.' : 'No visible parameters. Enable Firebase parameters to inspect internal metadata.'}</p>}{row.entryId && showInLogs && <button className="btn" onClick={() => showInLogs(row.entryId)}>Show in logs</button>}</div>;
 }

@@ -1,16 +1,8 @@
+import { PageHead as AVNPageHead } from '@avn/ui';
 // Small shared pieces: logo, icons, rail navigation.
-import { useApp, deviceName, viewStatus } from '../state.jsx';
-import { GameIcon } from './GameIcon.jsx';
 
 export function Logo({ size = 24 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 10 10" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="2" y="1" width="5" height="1" fill="#F6A57A" /><rect x="1" y="2" width="1" height="5" fill="#F6A57A" />
-      <rect x="7" y="2" width="1" height="5" fill="#F6A57A" /><rect x="2" y="7" width="5" height="1" fill="#F6A57A" />
-      <rect x="3" y="3" width="2" height="2" fill="#F1E7D6" /><rect x="7" y="7" width="1" height="1" fill="#F6A57A" />
-      <rect x="8" y="8" width="1" height="1" fill="#F6A57A" />
-    </svg>
-  );
+  return <img src="/avn-style/styles/avn-family/icons/avn-playlens.svg" width={size} height={size} alt="" />;
 }
 
 const stroke = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -19,7 +11,7 @@ export const Icon = {
   qr: (p) => <svg width="16" height="16" viewBox="0 0 24 24" {...stroke} strokeWidth="2.2" aria-hidden="true" {...p}><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v6h-4M14 18v2" /></svg>,
   arrow: (p) => <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} strokeWidth="2.2" aria-hidden="true" {...p}><path d="M5 12h14M13 6l6 6-6 6" /></svg>,
   back: (p) => <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} strokeWidth="2.4" aria-hidden="true" {...p}><path d="M15 6l-6 6 6 6" /></svg>,
-  search: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9A8B76" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" {...p}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>,
+  search: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" {...p}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>,
   pause: (p) => <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} strokeWidth="2.6" aria-hidden="true" {...p}><path d="M8 5v14M16 5v14" /></svg>,
   stop: (p) => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>,
   play: (p) => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}><path d="M7 4l13 8-13 8z" /></svg>,
@@ -34,108 +26,12 @@ export const Icon = {
   restart: (p) => <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} strokeWidth="2.4" aria-hidden="true" {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>,
 };
 
-export function Toast() {
-  const { toast, setToast } = useApp();
-  if (!toast) return null;
-  const color = toast.severity === 'critical' ? 'var(--bad)' : 'var(--warm-text)';
-  return (
-    <div className="toast" role="status">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className="eyebrow" style={{ color }}>{toast.severity === 'critical' ? 'Needs attention' : 'Heads up'}</span>
-        <span style={{ flex: '1 1 0' }} />
-        <button onClick={() => setToast(null)} style={{ border: 0, background: 'transparent', color: 'var(--mute)', cursor: 'pointer', fontSize: 13 }}>Dismiss</button>
-      </div>
-      <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }}>{toast.title}</div>
-      {toast.msg && <div className="mono mute" style={{ fontSize: 12.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toast.msg}</div>}
-    </div>
-  );
-}
-
-// Every view is its own place, not a step in a sequence, so each gets its own icon tile and
-// the views that look inside a game sit under their own heading.
-const GLOBAL_NAV = [
-  { id: 'home', title: 'All games', short: 'Home', icon: 'home', sub: () => ({ text: 'Your library' }) },
-  { id: 'sessions', title: 'Sessions', short: 'Sessions', icon: 'logs', sub: () => ({ text: 'All saved captures' }) },
-  { id: 'devices', title: 'Devices', short: 'Devices', icon: 'qr', sub: () => ({ text: 'Connections & pairing' }) },
-];
-const GAME_NAV = [
-  { id: 'game', title: 'Overview', short: 'Game', icon: 'home', group: 'GAME WORKSPACE', sub: () => ({ text: 'Controls & details' }) },
-  { id: 'logs', title: 'Logs', short: 'Logs', icon: 'logs', sub: (st, ctx) => ({ text: ctx.stopped ? 'Stopped' : 'Game output' }) },
-  { id: 'performance', title: 'Performance', short: 'Perf', icon: 'pulse', sub: (st) => st.performance },
-  { id: 'health', title: 'Plugin health', short: 'Health', icon: 'shield', sub: (st) => st.health },
-  { id: 'firebase', title: 'Firebase events', short: 'Firebase', icon: 'flame', sub: (st) => st.firebase, also: ['firebase-setup'] },
-  { id: 'remote-config', title: 'Remote Config', short: 'Config', icon: 'clipboard', sub: () => ({ text: 'Fetched values' }) },
-  { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
-  { id: 'snapshooter', title: 'Level Snapshooter', short: 'Levels', icon: 'camera', sub: () => ({ text: 'Screenshots & ZIP export' }) },
-  { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
-];
-
-export function Rail() {
-  const { view, setView, device, online, monitor, pkg, stopped, perfSummary, game, inGameWorkspace, viewGameSessions } = useApp();
-  const st = viewStatus(monitor, perfSummary);
-  return (
-    <aside className="rail-col">
-      <button className="wordmark" onClick={() => setView('home')} aria-label="AVN PlayLens home">
-        <Logo />
-        <span className="px wm-text">AVN PlayLens</span>
-      </button>
-      {inGameWorkspace && game && <button className="rail-game" onClick={() => setView('game')}><GameIcon game={game} size={40} paused={stopped} /><strong>{game.name}</strong></button>}
-      <nav aria-label="Views" className="rail-nav">
-        {[...GLOBAL_NAV, ...(inGameWorkspace ? GAME_NAV : [])].map((v) => {
-          const sub = v.sub(st, { stopped });
-          const active = view === v.id || v.also?.includes(view);
-          const locked = v.needsGame && !pkg;
-          const Ico = Icon[v.icon];
-          return (
-            <div key={v.id} className="nav-slot">
-              {v.group && <span className="nav-group eyebrow">{v.group}</span>}
-              <button className={`nav-item${active ? ' act' : ''}`} disabled={locked} onClick={() => v.id === 'sessions' ? viewGameSessions('__all') : setView(v.go?.(st) ?? v.id)} aria-current={active ? 'page' : undefined}>
-                <span className="nav-ico">
-                  <Ico />
-                  {!locked && sub.cls && <span className={`nav-pip ${sub.cls}`} />}
-                </span>
-                <span className="nav-text">
-                  <span className="t">{v.title}</span>
-                  <span className="t-short">{v.short}</span>
-                  <span className={`s ${locked ? '' : sub.cls ?? ''}`}>{locked ? 'Pick a game first' : sub.text}</span>
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </nav>
-      <div className="card rail-foot">
-        {device ? (
-          <>
-            <div className="rf-top">
-              <span className="dot ok pulse" />
-              <span className="rf-name">{deviceName(device)}</span>
-              <span className="tag tag-plain rf-tag">{device.transport === 'wifi' ? 'Wi-Fi' : device.transport}</span>
-            </div>
-            {online ? <div className="dim rf-sub">{inGameWorkspace ? stopped ? 'Tracking stopped' : 'Tracking this game only' : 'Tracking paused'}</div> : <div className="mono dim rf-sub">reconnecting to PlayLens…</div>}
-          </>
-        ) : (
-          <div className="dim" style={{ fontSize: 13.5 }}>{online ? 'No phone connected' : 'Starting…'}</div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
 // Page header used by every inside view.
 export function PageHead({ title, sub, children }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '12px 16px' }}>
-      <div style={{ flex: '1 1 auto' }}>
-        <h1 className="page-title">{title}</h1>
-        {sub && <div className="dim" style={{ fontSize: 14, marginTop: 8 }}>{sub}</div>}
-      </div>
-      {children}
-    </div>
-  );
+  return <AVNPageHead title={title} description={sub} actions={children && <div className="row-wrap">{children}</div>} />;
 }
 
-export function Check({ size = 14, color = '#16120F' }) {
+export function Check({ size = 14, color = 'var(--accent-ink)' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke={color} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 

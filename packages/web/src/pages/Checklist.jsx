@@ -6,6 +6,7 @@ import { PageHead, Check } from '../components/bits.jsx';
 import { Stepper } from './Firebase.jsx';
 import { BuildReportUpload, BuildVerificationTable, useBuildReport } from '../components/BuildReport.jsx';
 import { RemoteConfigTable } from '../components/RemoteConfigTable.jsx';
+import { Button, Kpi, Kpis, Panel, Tag } from '@avn/ui';
 
 const SEVERITY_TAG = { critical: 'tag-bad', warning: 'tag-warn', info: 'tag-plain' };
 
@@ -64,97 +65,14 @@ export function ChecklistSetup() {
   const items = run?.items ?? [];
   const ok = items.filter((i) => i.status === 'ok').length;
 
-  return (
-    <main className="main" style={{ alignItems: 'center', paddingTop: 52 }}>
-      <div style={{ width: '100%', maxWidth: 760 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px 16px' }}>
-          <span className="eyebrow">Checklist · setup</span>
-          {run && <button className="linkish" onClick={() => setView('checklist')}>Run already going? Open the checklist</button>}
-        </div>
-        <h1 className="setup-title">Set up a test run</h1>
-        <p className="mute" style={{ margin: '0 0 34px', fontSize: 16, lineHeight: 1.6, maxWidth: 600 }}>Attach the publishing report for {pkg}, choose its rules, then play to verify the build.</p>
-        <Stepper step={step} labels={['Report & rules', 'Start run', 'Play']} />
-
-        <div className="card setup-card">
-          {step === 1 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <BuildReportUpload pkg={pkg} report={build.report} matches={build.matches} reason={build.reason} onSaved={build.setReport} />
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Choose the rules for this game</h2>
-              <p className="mute" style={{ margin: '0 0 20px', fontSize: 15, lineHeight: 1.6 }}>A rules file lists the events you expect and extra log lines to flag. Edit it in any editor; the checklist updates when you save.</p>
-              {!rules && <SkeletonRows rows={3} />}
-              {rules?.files.map((f) => (
-                <button key={f.file} className="ropt" aria-pressed={file === f.file} onClick={() => setFile(f.file)}>
-                  <span className="radio"><i /></span>
-                  <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    <span className="mono" style={{ display: 'block', fontSize: 14 }}>{f.file}</span>
-                    <span style={{ display: 'block', fontSize: 13, color: f.error ? 'var(--bad)' : 'var(--mute)', marginTop: 3 }}>
-                      {f.error ? `Can't read it: ${f.error}` : `${f.expect} expected events · ${f.watch} flag rules${f.presets.length ? ` · presets: ${f.presets.join(', ')}` : ''}`}
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {rules && !hasOwn && (
-                <button className="ropt" onClick={create}>
-                  <span className="radio" style={{ borderStyle: 'dashed' }} />
-                  <span>
-                    <span style={{ display: 'block', fontSize: 14, fontWeight: 700 }}>Create a rules file for {pkg}</span>
-                    <span className="mute" style={{ display: 'block', fontSize: 13, marginTop: 3 }}>Starts with level_start, level_complete and the startup and remote-config checks</span>
-                  </span>
-                </button>
-              )}
-              {rules?.dir && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 'auto', paddingTop: 12, fontSize: 13 }} className="dim">
-                  <span>Rules live in <span className="mono mute">{rules.dir}</span></span>
-                  <button className="linkish" onClick={() => api('rules/reveal', { method: 'POST' })}>Open folder</button>
-                </div>
-              )}
-            </div>
-          )}
-          {step === 2 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Start the run</h2>
-              <p className="mute" style={{ margin: '0 0 18px', fontSize: 15, lineHeight: 1.6 }}>Starting clears the checklist and checks everything from now until you finish. The game keeps running.</p>
-              {chosen && (
-                <div className="mute" style={{ fontSize: 14.5, lineHeight: 1.7 }}>
-                  <div><span className="mono" style={{ color: 'var(--text)' }}>{chosen.file}</span></div>
-                  <div>{chosen.expect} expected events, {chosen.watch} flag rules{chosen.presets.length ? `, plugin checks: ${chosen.presets.join(', ')}` : ''}</div>
-                </div>
-              )}
-              {!monitor?.firebase?.debug?.on && (
-                <div style={{ marginTop: 16, background: 'var(--warn-soft)', color: 'var(--warn)', borderRadius: 12, padding: '12px 14px', fontSize: 14, lineHeight: 1.5 }}>
-                  Firebase debug mode is off, so events can't be checked. <button className="linkish" onClick={() => setView('firebase-setup')}>Set up Firebase first</button>
-                </div>
-              )}
-              <div style={{ marginTop: 'auto', paddingTop: 22 }}>
-                <p className={build.matches ? 'mute' : 'warn'}>{build.reason}</p>
-                <button className="btn btn-warm" style={{ height: 44 }} onClick={start} disabled={!file || !build.matches}><span className="dot" style={{ background: 'var(--warm-ink)' }} />Start run</button>
-              </div>
-            </div>
-          )}
-          {step === 3 && (
-            <div className="rise" style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
-              <h2 className="px" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600 }}>Run is live</h2>
-              <p className="mute" style={{ margin: '0 0 22px', fontSize: 15, lineHeight: 1.6 }}>Play the game. Each expected event ticks off as it's logged.</p>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', maxWidth: 540 }}>
-                <span className="mono" style={{ fontSize: 46 }}>{elapsed}</span>
-                <span className="mono" style={{ fontSize: 14 }}><span style={{ color: 'var(--ok)' }}>{ok}</span><span className="dim"> of {items.length} verified</span></span>
-              </div>
-              <div style={{ marginTop: 14, maxWidth: 540, height: 4, borderRadius: 2, background: '#26261F', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: items.length ? `${(ok / items.length) * 100}%` : 0, background: 'var(--ok)', transition: 'width .8s cubic-bezier(.2,.8,.2,1)' }} />
-              </div>
-              <div style={{ marginTop: 'auto', paddingTop: 22 }}>
-                <button className="btn btn-warm" style={{ height: 44 }} onClick={() => setView('checklist')}>Open checklist</button>
-              </div>
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, minHeight: 44 }}>
-          {step > 1 && step < 3 ? <button className="btn" onClick={() => setStep(step - 1)}>Back</button> : <span />}
-          {step === 1 && <button className="btn btn-warm" onClick={() => setStep(2)} disabled={!file || !!chosen?.error || !build.matches}>Next</button>}
-        </div>
-      </div>
-    </main>
-  );
+  return <main className="content">
+    <PageHead title="Set up a test run" sub={`Attach the publishing report and choose rules for ${pkg}.`}><Button onClick={() => setView('checklist')}>Back to checklist</Button></PageHead>
+    <Stepper step={step} labels={['Report & rules', 'Start run', 'Play']} />
+    {step === 1 && <div className="pl-setup-layout"><Panel title="Publishing report"><div className="pb"><BuildReportUpload pkg={pkg} report={build.report} matches={build.matches} reason={build.reason} onSaved={build.setReport} /></div></Panel><Panel title="Game rules"><div className="pb pl-setup-panel"><p className="muted">Choose the events and checks to verify while playing.</p>{!rules ? <SkeletonRows rows={3} /> : <label className="fld">Rules file<select value={file || ''} onChange={(e) => setFile(e.target.value)}><option value="" disabled>Choose a rules file</option>{rules.files.map((f) => <option key={f.file} value={f.file}>{f.file}</option>)}</select></label>}{chosen && <><span className="tag plain">{chosen.expect} expected events · {chosen.watch} flag rules</span>{chosen.error && <p className="badc">{chosen.error}</p>}</>}{rules && !hasOwn && <Button onClick={create}>Create this game’s rules file</Button>}{rules?.dir && <Button variant="ghost" onClick={() => api('rules/reveal', { method: 'POST' })}>Open rules folder</Button>}</div></Panel></div>}
+    {step === 2 && <Panel title="Ready to start"><div className="pb pl-setup-panel"><p className="muted">The checklist starts fresh and checks evidence from this moment until you finish. The game keeps running.</p><div className="row-wrap"><span className="mono">{chosen?.file}</span><Tag kind={build.matches ? 'ok' : 'warn'}>{build.matches ? 'Build matches' : 'Check installed build'}</Tag></div><p className="muted">{build.reason}</p>{!monitor?.firebase?.debug?.on && <div className="banner">Firebase debug mode is off. <button className="linkish" onClick={() => setView('firebase-setup')}>Set up Firebase</button></div>}<Button variant="primary" disabled={!file || !build.matches || starting != null} loading={starting != null} loadingLabel="Starting run…" onClick={start}>Start run</Button></div></Panel>}
+    {step === 3 && <Panel title="Run in progress" actions={<Tag kind="info">Live</Tag>}><div className="pb pl-setup-panel"><p className="muted">Play the game. Checks verify as supporting evidence arrives.</p><Kpis><Kpi label="Elapsed" value={elapsed} /><Kpi label="Verified" value={`${ok} / ${items.length}`} /></Kpis><Button variant="primary" onClick={() => setView('checklist')}>Open checklist</Button></div></Panel>}
+    <div className="row-wrap">{step > 1 && step < 3 && <Button onClick={() => setStep(step - 1)}>Back</Button>}{step === 1 && <Button variant="primary" disabled={!file || !!chosen?.error || !build.matches} onClick={() => setStep(2)}>Continue</Button>}</div>
+  </main>;
 }
 
 export function Checklist() {
@@ -164,9 +82,9 @@ export function Checklist() {
   const report = monitor?.report ?? lastReport;
   if (!run) {
     return (
-      <main className="main">
+      <main className="content">
         <PageHead title="Checklist" />
-        <div className="card empty">No run yet. <button className="linkish" onClick={() => setView('checklist-setup')}>Set one up</button></div>
+        <Panel><div className="pl-empty"><h2>No test run yet.</h2><p className="muted">Attach this build’s report and rules to start verifying it.</p><Button variant="primary" onClick={() => setView('checklist-setup')}>Set up a test run</Button></div></Panel>
       </main>
     );
   }
@@ -177,7 +95,7 @@ export function Checklist() {
   const flags = (monitor.flags ?? []).filter((f) => f.severity !== 'info');
 
   return (
-    <main className="main">
+    <main className="content">
       <PageHead title="Checklist" sub={`${run.file} · ${pkg} on ${deviceName(device)}`}>
         {run.active
           ? <>
@@ -192,7 +110,7 @@ export function Checklist() {
       </PageHead>
 
       {report && !run.active && (
-        <div className="card rise" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '16px 20px', borderColor: '#2f6a50', background: '#17221d' }}>
+        <div className="panel rise" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '16px 20px', borderColor: 'var(--ok)', background: 'var(--ok-soft)' }}>
           <span className="px" style={{ fontSize: 18 }}>Report ready: {report.passed} of {report.total} passed</span>
           <span className="mute">{report.buildVerified ?? 0} of {report.buildTotal ?? 0} For Dev items verified</span>
           <span style={{ flex: '1 1 0' }} />
@@ -204,44 +122,13 @@ export function Checklist() {
         </div>
       )}
 
+      <Kpis><Kpi label="Verified" value={counts.ok} context={`Of ${items.length} checks`} /><Kpi label="Needs a look" value={counts.problem} context="Issues observed in this run" /><Kpi label="Waiting" value={counts.pending} context="No supporting evidence yet" /></Kpis>
+      <Panel title="Runtime checklist" actions={<Tag kind={run.active ? 'info' : 'plain'}>{run.active ? 'Run in progress' : 'Run finished'}</Tag>}><div className="t-wrap"><table className="t"><thead><tr><th>Check</th><th>Result / evidence</th><th>First observed</th></tr></thead>{groups.map((g) => <tbody key={g}><tr className="pl-table-group"><th colSpan="3">{g}</th></tr>{items.filter((i) => i.group === g).map((i) => <tr key={i.id}><td><strong className={i.event ? 'mono' : undefined}>{i.event ?? i.name}</strong>{i.sdk && <div className="pl-page-note">{i.sdk}</div>}</td><td><div className="row-wrap"><Tag kind={i.status === 'ok' ? 'ok' : i.status === 'problem' ? 'bad' : 'plain'}>{i.status === 'ok' ? 'Verified' : i.status === 'problem' ? 'Problem' : 'Waiting'}</Tag><span>{i.note || (i.status === 'pending' ? 'Not seen in this run.' : i.event ? i.name : '')}</span></div></td><td className="mono pl-nowrap">{i.firstTs ? clock(i.firstTs, false) : '—'}</td></tr>)}</tbody>)}</table></div></Panel>
       <BuildVerificationTable build={run.build} showInLogs={showInLogs} />
-      <RemoteConfigTable rc={run.rc} showInLogs={showInLogs} />
-
-      <div className="card" style={{ padding: '22px 24px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '8px 24px', marginBottom: 16 }}>
-          <span className="px" style={{ fontSize: 30, fontWeight: 600 }}>{counts.ok} of {items.length} verified</span>
-          <span className="mute" style={{ fontSize: 14.5 }}>{counts.problem ? <span style={{ color: 'var(--warn)' }}>{counts.problem} need a look</span> : 'nothing to fix'} · {counts.pending} waiting</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }} aria-hidden="true">
-          {items.map((i, n) => <span key={i.id} className={`blk ${i.status}`} style={{ animationDelay: `${n * 0.05}s` }} />)}
-        </div>
-      </div>
-
-        <div className="card" style={{ minWidth: 0, overflow: 'hidden' }}>
-          {groups.map((g) => (
-            <div key={g}>
-              <div className="eyebrow" style={{ padding: '16px 22px 10px' }}>{g}</div>
-              {items.filter((i) => i.group === g).map((i) => (
-                <div key={i.id} className="citem" style={i.status === 'problem' ? { background: 'rgba(235,200,106,.05)' } : undefined}>
-                  <span className={`ck ${i.status}`}>{i.status === 'ok' ? <Check /> : i.status === 'problem' ? '!' : null}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span className={i.event ? 'mono' : ''} style={{ fontSize: 15.5, fontWeight: i.event ? 500 : 700 }}>{i.event ?? i.name}</span>
-                      {i.sdk && i.type === 'event' && <span className={`tag sdk-${i.sdk === 'bytebrew' ? 'BB' : 'FA'}`}>{i.sdk === 'bytebrew' ? 'BB' : 'FA'}</span>}
-                    </span>
-                    <span style={{ display: 'block', fontSize: 14, marginTop: 4, color: i.status === 'problem' ? 'var(--warn)' : 'var(--mute)' }}>
-                      {i.status === 'pending' ? (i.note || (i.event ? 'Waiting. Not seen yet in this run' : 'Waiting')) : i.note || (i.event ? i.name : '')}
-                    </span>
-                  </span>
-                  <span className="mono dim" style={{ fontSize: 12.5 }}>{i.firstTs ? clock(i.firstTs, false) : 'not yet'}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+      <Disclosure id="checklist.config" title="Captured Remote Config" hint="Values recorded for this test run."><RemoteConfigTable rc={run.rc} showInLogs={showInLogs} /></Disclosure>
 
       <Disclosure id="checklist.more" title="Rule hits and rules file" hint={`${flags.length ? `${flags.length} rule hit${flags.length === 1 ? '' : 's'}` : 'No rule hits'} · ${run.file}`}>
-        <div className="card" style={{ padding: '16px 22px 10px' }}>
+        <div className="panel" style={{ padding: '16px 22px 10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span className="eyebrow">Rule hits</span>
             <button className="linkish" onClick={() => setView('logs')}>Open logs</button>

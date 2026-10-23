@@ -7,7 +7,7 @@ const lit = [[16, 56], [25, 51], [45, 49], [47, 54], [67, 47], [69, 52], [89, 53
 
 export function PixelScene({ caption, ready }) {
   return (
-    <div className="card rise" style={{ flex: '1 1 480px', maxWidth: 560, overflow: 'hidden', padding: 0, animationDelay: '.1s' }}>
+    <div className="panel rise" style={{ flex: '1 1 480px', maxWidth: 560, overflow: 'hidden', padding: 0, animationDelay: '.1s' }}>
       <svg viewBox="0 0 160 110" width="100%" style={{ display: 'block' }} shapeRendering="crispEdges" role="img" aria-label="Pixel art of a cozy desk at night with a phone on a stand">
         <defs>
           <pattern id="dith" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#2A3060" /><rect x="1" y="1" width="1" height="1" fill="#2A3060" /></pattern>

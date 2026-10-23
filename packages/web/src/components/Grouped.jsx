@@ -30,14 +30,14 @@ export function Grouped({ q, filter, onShow }) {
   }, [version, q, filter]);
 
   const empty = sections.every((s) => !s.items.length);
-  if (empty) return <div className="card empty">{q || filter !== 'all' ? 'No warnings or errors match.' : 'No warnings or errors yet. Nice.'}</div>;
+  if (empty) return <div className="panel empty">{q || filter !== 'all' ? 'No warnings or errors match.' : 'No warnings or errors yet. Nice.'}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {sections.filter((s) => s.items.length).map((s) => {
         const quiet = s.id === 'android' && !showSafe;
         return (
-          <section key={s.id} className="card" style={{ overflow: 'hidden' }}>
+          <section key={s.id} className="panel" style={{ overflow: 'hidden' }}>
             <div className="ghead">
               <span className={`odot o-${s.id}`} />
               <span style={{ fontWeight: 700, fontSize: 16 }}>{s.title}</span>

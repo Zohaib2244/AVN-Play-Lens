@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Button, Drawer, Panel } from '@avn/ui';
 import { useApp, deviceName, clock } from '../state.jsx';
 import { api } from '../api.js';
 import { Icon, PageHead } from '../components/bits.jsx';
@@ -38,7 +39,7 @@ function Detail({ e }) {
   facts.push(['Tag', e.tag], ['Process', `${e.pid} / thread ${e.tid}`]);
   const copy = () => navigator.clipboard?.writeText([`${clock(e.ts)} ${e.level} ${e.tag}: ${e.message}`, ...(e.more || [])].join('\n'));
   return (
-    <div className="detail">
+    <div className="log-detail">
       <div style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 12, wordBreak: 'break-word' }} className="mono">{cleanMessage(e)}</div>
       {e.more && <pre className="trace">{e.more.join('\n')}</pre>}
       {params && Object.keys(params).length > 0 && (
@@ -57,11 +58,11 @@ function Detail({ e }) {
 export function useAppAction() {
   const { serial, pkg, showToast } = useApp();
   return (action) => api(`devices/${encodeURIComponent(serial)}/apps/${encodeURIComponent(pkg)}/${action}`, { method: 'POST' })
-    .catch((e) => showToast({ title: `Could not ${action} the game`, msg: e.message }));
+    .then(() => true).catch((e) => { showToast({ title: `Could not ${action} the game`, msg: e.message, severity: 'critical' }); return false; });
 }
 
 export function Logs() {
-  const { device, pkg, lines, version, stream, rate, alerts, setAlerts, sessionId, focusEntry, setFocusEntry, stopped, setStopped, monitor } = useApp();
+  const { device, pkg, lines, version, stream, rate, alerts, setAlerts, sessionId, focusEntry, setFocusEntry, stopped, setStopped, monitor, setView, gameInventory, serial } = useApp();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [mode, setMode] = useState(() => { try { return localStorage.getItem('playlens.logMode') || 'lines'; } catch { return 'lines'; } });
@@ -121,10 +122,10 @@ export function Logs() {
     setStopped(!stopped);
   };
 
-  // Space pauses / resumes, unless you're typing or on a button outside the log.
+  // Ctrl/Cmd + Space pauses / resumes, unless you're typing or on a button outside the log.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.code !== 'Space' || e.repeat || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       const t = e.target;
       if (t.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       if (t.closest?.('button, a') && !t.closest('.logscroll')) return;   // log rows are fine; other buttons keep Space
@@ -141,28 +142,30 @@ export function Logs() {
     if (el) setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 60);
   }, []);
 
-  if (!device) {
+  const installed = gameInventory.serial === serial ? gameInventory.games.find((g) => g.packageId === pkg)?.installed : undefined;
+  if (!device || installed === false) {
     return (
-      <main className="main">
+      <main className="content">
         <h1 className="page-title">Logs</h1>
-        <div className="card empty">Connect a phone first. Logs start as soon as one is ready.</div>
+        <Panel><div className="pl-empty"><h2>{!device ? 'No device connected.' : 'This game is not installed.'}</h2><p className="muted">{!device ? 'Connect a phone to collect this game’s output.' : 'Install the package on the selected phone, or choose another device.'}</p><Button onClick={() => setView(!device ? 'connect' : 'game')}>{!device ? 'Connect device' : 'Open game controls'}</Button></div></Panel>
       </main>
     );
   }
 
+  const openEntry = shown.find((entry) => entry.id === open);
   const newCount = shown.length ? shown.filter((e) => e.id > lastId).length : 0;
   return (
-    <main className="main">
+    <main className="content">
       <PageHead
         title="Logs"
-        sub={<>{pkg ? `${pkg} on ${deviceName(device)}` : `Everything on ${deviceName(device)}`} · {shown.length.toLocaleString()} lines
+        sub={<>{pkg ? `${pkg} on ${deviceName(device)}` : `Everything on ${deviceName(device)}`} · {shown.length.toLocaleString()} {shown.length === 1 ? 'line' : 'lines'}
           {pkg && !device.replay && <> · <span style={{ color: stream.running ? 'var(--ok)' : 'var(--dim)' }}>{stream.running ? 'game running' : 'game not running'}</span></>}</>}
       >
-        {stopped ? <span className="live paused">Stopped</span> : <LiveBars label={paused ? 'Paused' : rate ? `Live · ${rate}/s` : 'Live'} paused={paused} />}
+        {stopped ? <span className="tag plain">Stopped</span> : <LiveBars label={paused ? 'Paused' : rate ? `Live · ${rate}/s` : 'Live'} paused={paused} />}
         {stopped
           ? <button className="btn btn-warm" onClick={toggleStopped}><Icon.play /> Start log</button>
           : (
-            <button className="btn" aria-pressed={paused} onClick={togglePause} title="Freeze the view; lines are still collected (Space)">
+            <button className="btn" aria-pressed={paused} onClick={togglePause} title="Freeze the view; lines are still collected (Ctrl/Cmd + Space)">
               {paused ? <><Icon.play /> Resume</> : <><Icon.pause /> Pause</>}
             </button>
           )}
@@ -179,7 +182,7 @@ export function Logs() {
         ]} />
       </PageHead>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+      <div className="filters pl-log-filters">
         <div className="qwrap">
           <Icon.search />
           <input className="qin" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the logs" aria-label="Search the logs" />
@@ -197,13 +200,21 @@ export function Logs() {
         <GamePicker />
       </div>
 
+      {(q || filter !== 'all' || paused) && <div className="pl-active-filters" aria-label="Active log filters">
+        <span>Showing</span>
+        {q && <span className="chip">Search: {q}<button aria-label="Clear log search" onClick={() => setQ('')}>×</button></span>}
+        {filter !== 'all' && <span className="chip">{filter === 'warn' ? 'Warnings and errors' : 'Errors only'}<button aria-label="Clear severity filter" onClick={() => setFilter('all')}>×</button></span>}
+        {paused && <span className="tag tag-warm">View paused · capture continues</span>}
+        {(q || filter !== 'all') && <button className="linkish" onClick={() => { setQ(''); setFilter('all'); }}>Clear filters</button>}
+      </div>}
+
       {mode === 'grouped' ? <Grouped q={q} filter={filter === 'warn' ? 'all' : filter} onShow={(id) => { pickMode('lines'); setPaused(false); setFocusEntry(id); }} /> : (<>
-      <div className="card logcard">
+      <div className="panel logcard">
         <div className="loghead eyebrow"><span>Time</span><span>Level</span><span>Message</span><span style={{ textAlign: 'right' }}>From</span></div>
         <div className="logscroll" ref={scrollRef} onScroll={onScroll} role="log" aria-live="off">
           {shown.length === 0 ? (
             !stopped && !q && filter === 'all' && stream.state !== 'ended' && !lines.current.length ? <SkeletonLog /> :
-            <div className="empty">{stopped ? 'The log is stopped. Press Start log to begin a fresh one.' : stream.state === 'ended' ? `The log stopped: ${stream.reason}` : q || filter !== 'all' ? 'Nothing matches the filter yet.' : 'Waiting for the first lines…'}</div>
+            <div className="empty">{stopped ? 'The log is stopped. Press Start log to begin a fresh one.' : stream.state === 'ended' ? `The log stopped: ${stream.reason}` : q || filter !== 'all' ? <span>No lines match these filters. <button className="linkish" onClick={() => { setQ(''); setFilter('all'); }}>Clear filters</button></span> : 'Waiting for the first lines…'}</div>
           ) : (
             <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
               {virt.getVirtualItems().map((vi) => {
@@ -211,13 +222,12 @@ export function Logs() {
                 const isOpen = open === e.id;
                 return (
                   <div key={vi.key} data-index={vi.index} ref={virt.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start}px)` }}>
-                    <button className={`row r-${e.level}${isOpen ? ' open' : ''}${e.id > lastId && !paused ? ' new' : ''}`} onClick={() => setOpen(isOpen ? null : e.id)} aria-expanded={isOpen}>
+                    <button className={`log-row r-${e.level}${isOpen ? ' open' : ''}${e.id > lastId && !paused ? ' new' : ''}`} onClick={() => setOpen(isOpen ? null : e.id)} aria-expanded={isOpen}>
                       <span className="mono dim" style={{ fontSize: 12.5 }}>{clock(e.ts)}</span>
                       <span className={`lv lv-${e.level}`}>{LEVEL_WORD[e.level] || ''}</span>
                       <span className="cell-msg">{cleanMessage(e)}{e.more ? <span className="dim">  +{e.more.length} lines</span> : null}</span>
                       <span className="cell-from">{fromLabel(e)}</span>
                     </button>
-                    {isOpen && <Detail e={e} />}
                   </div>
                 );
               })}
@@ -236,9 +246,10 @@ export function Logs() {
             : <button className="btn btn-sm" onClick={() => { setFollow(true); virt.scrollToIndex(shown.length - 1, { align: 'end' }); }}>↓ Jump to newest{newCount ? ` (${newCount} new)` : ''}</button>}
         {device.replay && <span className="tag tag-plain">Replay: saved demo log, not a live phone</span>}
         <span style={{ flex: '1 1 0' }} />
-        <span className="dim">Click a line to see more{!stopped && <> · <kbd>Space</kbd> pauses</>}</span>
+        <span className="dim">Click a line to see more{!stopped && <> · <kbd>Ctrl Space</kbd> pauses</>}</span>
       </div>
       </>)}
+      <Drawer open={!!openEntry} onClose={() => setOpen(null)} title={openEntry ? fromLabel(openEntry) : 'Log entry'} subtitle={openEntry ? `${clock(openEntry.ts)} · ${LEVEL_WORD[openEntry.level] || openEntry.level}` : undefined}>{openEntry && <Detail e={openEntry} />}</Drawer>
     </main>
   );
 }

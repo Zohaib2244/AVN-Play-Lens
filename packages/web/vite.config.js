@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 // Keep OCR offline in development and in the single-file distribution.
@@ -29,6 +30,7 @@ function localOcr() {
 // In dev, the API runs on 7420 (`npm run dev:server`) and vite proxies to it.
 export default defineConfig({
   plugins: [react(), localOcr()],
+  resolve: { alias: { '@avn/ui': fileURLToPath(new URL('./src/design/ui/index.ts', import.meta.url)) }, dedupe: ['react', 'react-dom', 'motion'] },
   server: {
     port: 5173,
     proxy: {

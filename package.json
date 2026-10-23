@@ -17,7 +17,7 @@
     "build": "npm run build -w packages/web",
     "dev:server": "node packages/server/bin/avn-playlens.mjs --dev --replay",
     "dev:web": "npm run dev -w packages/web",
-    "test": "node --test \"packages/server/**/*.test.mjs\"",
+    "test": "node --test \"packages/server/**/*.test.mjs\" \"packages/web/src/*.test.mjs\"",
     "package": "node scripts/package.mjs"
   },
   "devDependencies": {

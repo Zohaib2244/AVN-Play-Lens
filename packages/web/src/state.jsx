@@ -3,6 +3,7 @@
 // running while you switch between Logs, Plugin health, Firebase and Checklist.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { api, connectSocket } from './api.js';
+import { readLocation, viewLocation } from './navigation.mjs';
 
 const AppContext = createContext(null);
 const MAX_LINES = 50000;
@@ -14,16 +15,16 @@ export function AppProvider({ children }) {
   const [devices, setDevices] = useState([]);
   const [pair, setPair] = useState({ state: 'idle' });
   const [online, setOnline] = useState(false);
-  const [view, setView] = useState('home');
+  const [view, setView] = useState(() => readLocation(window.location.search).view);
   const [serial, setSerial] = useState(null);
-  const [pkg, setPkg] = useState(null);
+  const [pkg, setPkg] = useState(() => readLocation(window.location.search).pkg);
   const [games, setGames] = useState([]);
   const [gamesLoaded, setGamesLoaded] = useState(false);
   const [gamesError, setGamesError] = useState('');
   const [gameInventory, setGameInventory] = useState({ serial: null, games: [] });
   const [inventoryError, setInventoryError] = useState('');
   const [actionBusy, setActionBusy] = useState(null);
-  const [archiveReturn, setArchiveReturn] = useState('sessions');
+  const [archiveReturn, setArchiveReturn] = useState(() => readLocation(window.location.search).pkg ? 'game-sessions' : 'sessions');
   const captureIdentity = useRef(null);
   const displayedIdentity = useRef(null);
   const collectionAllowed = useRef(false);
@@ -44,7 +45,7 @@ export function AppProvider({ children }) {
   const [captureVersion, setCaptureVersion] = useState(0);
   const [captureRequest, setCaptureRequest] = useState(0);
   const [historyVersion, setHistoryVersion] = useState(0);
-  const [archivedId, setArchivedId] = useState(null);
+  const [archivedId, setArchivedId] = useState(() => readLocation(window.location.search).archivedId);
   const disposition = useRef('save');
   const [toast, setToast] = useState(null);
   const [alerts, setAlerts] = useState(true);
@@ -58,14 +59,26 @@ export function AppProvider({ children }) {
   const socket = useRef(null);
   const streamId = useRef(0);
   const raf = useRef(0);
-  const toastTimer = useRef(0);
   const alertsRef = useRef(alerts);
   alertsRef.current = alerts;
 
-  const showToast = useCallback((t) => {
-    setToast(t);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  const showToast = useCallback((t) => setToast(t), []);
+
+  useEffect(() => {
+    const route = readLocation(window.location.search);
+    const search = viewLocation(window.location.search, { view, pkg, archivedId });
+    if (route.view !== view || window.location.search !== search) {
+      window.history.pushState(null, '', `${window.location.pathname}${search}${window.location.hash}`);
+    }
+  }, [view, pkg, archivedId]);
+  useEffect(() => {
+    const onPop = () => {
+      const route = readLocation(window.location.search);
+      setView(route.view); setPkg(route.pkg); setArchivedId(route.archivedId);
+      if (route.view === 'saved-session') setArchiveReturn(route.pkg ? 'game-sessions' : 'sessions');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const resetCapture = useCallback(() => {
@@ -96,7 +109,7 @@ export function AppProvider({ children }) {
       }
       if (msg.type === 'devices') return setDevices(msg.devices);
       if (msg.type === 'pair') return setPair(msg);
-      if (msg.type === 'error') return showToast({ title: 'Something went wrong', msg: msg.message });
+      if (msg.type === 'error') return showToast({ title: 'PlayLens could not complete the request', msg: msg.message, severity: 'critical' });
       if (!collectionAllowed.current && ['log.batch', 'monitor', 'perf', 'alert', 'run.report'].includes(msg.type)) return;
       if (msg.type === 'run.report') return setLastReport(msg);
       if (msg.streamId !== undefined && msg.streamId !== streamId.current) return;

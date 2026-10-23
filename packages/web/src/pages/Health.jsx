@@ -3,6 +3,8 @@ import { useApp, deviceName, clock, secs } from '../state.jsx';
 import { PageHead, Check, Lattice } from '../components/bits.jsx';
 import { StateBadge } from '../components/StateBadge.jsx';
 import { Disclosure, Skeleton } from '../components/ui.jsx';
+import { Kpi, Kpis, Panel, Pipeline, StatusStrip, Tag, Button } from '@avn/ui';
+import dora from '../design/dora.svg?raw';
 
 const STEP_NAMES = { awake: 'Awake', start: 'Start', accepted: 'Init accepted', max: 'MAX', firebase: 'Firebase', admob: 'AdMob', rc: 'Remote config', done: 'Init done', autoload: 'Auto-load' };
 const SEVERITY_TAG = { critical: 'tag-bad', warning: 'tag-warn', info: 'tag-plain' };
@@ -59,7 +61,7 @@ function sdkState(card) {
 function SdkCard({ card, extra }) {
   const state = sdkState(card);
   return (
-    <div className={`card sdk${card.notUsed || card.noLogs ? ' na' : ''}`}>
+    <div className={`panel sdk${card.notUsed || card.noLogs ? ' na' : ''}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <span style={{ fontWeight: 700, fontSize: 16 }} className={card.notUsed || card.noLogs ? 'mute' : ''}>{card.label}</span>
         <StateBadge state={state} label={state === 'Initialized' ? 'Ready' : state} />
@@ -87,7 +89,7 @@ function CheckCard({ title, sub, checks, empty }) {
   const ok = count('ok');
   const waiting = count('pending');
   return (
-    <section className="card" style={{ flex: '1 1 400px', minWidth: 0, overflow: 'hidden' }}>
+    <section className="panel" style={{ flex: '1 1 400px', minWidth: 0, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 22px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: 16 }}>{title}</span>
         <span style={{ flex: '1 1 auto' }} />
@@ -111,26 +113,28 @@ function CheckCard({ title, sub, checks, empty }) {
 function HealthSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }} aria-busy="true" aria-label="Loading plugin health">
-      <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 12 }}><Skeleton w="40%" h={24} /><Skeleton w="70%" /></div>
-      <div className="card" style={{ padding: 22, display: 'flex', gap: 18 }}>{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} w="100%" h={46} r={10} />)}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>{Array.from({ length: 4 }, (_, i) => <div key={i} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}><Skeleton w="60%" h={16} /><Skeleton w="40%" h={11} /></div>)}</div>
+      <div className="panel" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 12 }}><Skeleton w="40%" h={24} /><Skeleton w="70%" /></div>
+      <div className="panel" style={{ padding: 22, display: 'flex', gap: 18 }}>{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} w="100%" h={46} r={10} />)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>{Array.from({ length: 4 }, (_, i) => <div key={i} className="panel" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}><Skeleton w="60%" h={16} /><Skeleton w="40%" h={11} /></div>)}</div>
     </div>
   );
 }
 
 export function Health() {
-  const { monitor, device, pkg, showInLogs, setView } = useApp();
+  const { monitor, device, pkg, showInLogs, setView, gameInventory, serial } = useApp();
   const [onlyProblems, setOnlyProblems] = useState(true);
   const [allIssues, setAllIssues] = useState(false);
   const h = monitor?.health;
   const head = (sub) => <PageHead title="Plugin health" sub={sub ?? `AVN plugin · ${pkg || 'no game picked'} on ${deviceName(device)}`} />;
 
-  if (!monitor) return <main className="main">{head()}<HealthSkeleton /></main>;
+  const installed = gameInventory.serial === serial ? gameInventory.games.find((g) => g.packageId === pkg)?.installed : undefined;
+  if (!device || installed === false) return <main className="content">{head()}<Panel><div className="pl-empty"><h2>{!device ? 'No device connected.' : 'This game is not installed.'}</h2><p className="muted">Connect a device with this game installed to receive plugin evidence.</p><Button onClick={() => setView('game')}>Open game controls</Button></div></Panel></main>;
+  if (!monitor) return <main className="content">{head()}<HealthSkeleton /></main>;
   if (!h?.seen) {
     return (
-      <main className="main">
+      <main className="content">
         {head()}
-        <div className="card empty" style={{ lineHeight: 1.7, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div className="panel empty" style={{ lineHeight: 1.7, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <Lattice />
           <div className="px" style={{ fontSize: 22, color: 'var(--text)' }}>Waiting for the AVN plugin</div>
           <div>Launch or restart the game. Plugin lines end with <span className="mono">| AVNPLUGIN</span>.<br />If the game is running and nothing shows up, the build may not include the plugin.</div>
@@ -162,63 +166,35 @@ export function Health() {
   const healthy = !issues.length && !h.debugInRelease;
 
   return (
-    <main className="main" style={{ gap: 22 }}>
+    <main className="content" style={{ gap: 22 }}>
       <PageHead title="Plugin health" sub={`AVN plugin · ${pkg} on ${deviceName(device)}${startedLabel ? ` · ${startedLabel}` : ''}`}>
         {h.debugLogs === 'off' && <span className="tag tag-warn">Plugin debug logs off</span>}
       </PageHead>
 
 
       {h.debugInRelease && (
-        <div className="card" style={{ padding: '16px 20px', borderColor: '#6b2e27', background: '#2a1916', lineHeight: 1.6 }}>
+        <div className="panel" style={{ padding: '16px 20px', borderColor: 'var(--bad)', background: 'var(--bad-soft)', lineHeight: 1.6 }}>
           <b style={{ color: 'var(--bad)' }}>Plugin debug logging is on in a release build.</b> <span className="mute">Remove USE_AVNADS_PLUGIN_DEBUG before shipping.</span>
         </div>
       )}
       {h.debugLogs === 'off' && (
-        <div className="card note"><b style={{ color: 'var(--warn)' }}>Only warnings and errors are visible.</b> This build doesn't define USE_AVNADS_PLUGIN_DEBUG, so most checks below can't run.</div>
+        <div className="panel note"><b style={{ color: 'var(--warn)' }}>Only warnings and errors are visible.</b> This build doesn't define USE_AVNADS_PLUGIN_DEBUG, so most checks below can't run.</div>
       )}
 
-      <section className="card rise" style={{ padding: '20px 22px', ...(healthy ? {} : { borderColor: '#5a4a1e', background: '#221d14' }) }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px 18px', flexWrap: 'wrap' }}>
-          <span className="px" style={{ fontSize: 24, color: healthy ? 'var(--ok)' : 'var(--warn)' }}>{healthy ? 'All good' : `${issues.length} ${issues.length === 1 ? 'thing' : 'things'} to look at`}</span>
-          <span className="summary-line">
-            <span><b>{done}/{startup.length}</b> startup steps</span>
-            <span><b>{readySdks}</b> SDKs ready</span>
-            <span><b>{ads}</b> ads shown</span>
-            <span><b>${h.revenue.total.toFixed(4)}</b> revenue</span>
-          </span>
-        </div>
-        {issues.length > 0 && (
-          <div style={{ marginTop: 10 }}>
-            {shownIssues.map((f) => (
-              <div key={f.id} className="flagrow">
-                <span className={`tag ${SEVERITY_TAG[f.severity]}`}>{f.severity === 'critical' ? 'error' : 'warning'}</span>
-                <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <span style={{ fontWeight: 700 }}>{f.name}</span>
-                  <span className="mono dim" style={{ display: 'block', fontSize: 12.5, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.detail}</span>
-                </span>
-                {f.count > 1 && <span className="mono dim" style={{ fontSize: 12.5 }}>x{f.count}</span>}
-                {f.entryId && <button className="linkish" onClick={() => showInLogs(f.entryId)}>Show line</button>}
-              </div>
-            ))}
-            {issues.length > 3 && <button className="linkish" style={{ marginTop: 10 }} onClick={() => setAllIssues(!allIssues)}>{allIssues ? 'Show fewer' : `Show all ${issues.length}`}</button>}
-          </div>
-        )}
-      </section>
+      <StatusStrip live={false} status={healthy ? 'No issues observed' : `${issues.length} need a look`} items={[device?.replay ? 'Simulated replay evidence' : 'Current capture']} tag={<Tag kind={healthy ? 'ok' : 'warn'}>{healthy ? 'Clear so far' : 'Needs attention'}</Tag>} />
+      <Kpis><Kpi label="Startup" value={`${done} / ${startup.length}`} context="Steps completed" /><Kpi label="SDKs ready" value={readySdks} context="Initialized in this capture" /><Kpi label="Ads shown" value={ads} context="Interstitial and rewarded" /><Kpi label="Ad revenue" value={`$${h.revenue.total.toFixed(4)}`} context="Reported by the game" /></Kpis>
+      <Panel title="Needs a look" actions={<Tag kind={issues.length ? 'warn' : 'plain'}>{issues.length} observed issues</Tag>}>
+        {shownIssues.map((f) => <div className="look" key={f.id}><span className={`tag ${SEVERITY_TAG[f.severity]}`}>{f.severity === 'critical' ? 'Failed' : 'Warning'}</span><div><b>{f.name}</b><span className="s" title={f.detail}>{f.detail}</span></div>{f.entryId && <button className="btn ghost sm" onClick={() => showInLogs(f.entryId)}>Inspect</button>}</div>)}
+        {!issues.length && <div className="pl-quiet"><span dangerouslySetInnerHTML={{ __html: dora }} /><p className="muted">Nothing needs a look in the evidence received so far.</p></div>}
+        {issues.length > 3 && <div className="pb"><button className="btn ghost" onClick={() => setAllIssues(!allIssues)}>{allIssues ? 'Show fewer' : `Show all ${issues.length}`}</button></div>}
+      </Panel>
 
-      <section className="card rise" style={{ padding: '18px 22px' }}>
+      <section className="panel rise" style={{ padding: '18px 22px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
           <span className="eyebrow">Startup</span>
           <span className="mono" style={{ fontSize: 13 }}><span style={{ color: 'var(--ok)' }}>{done}</span><span className="dim"> of {startup.length} steps</span></span>
         </div>
-        <div className="tl" role="list" aria-label="Startup steps">
-          {startup.map((s) => (
-            <div key={s.id} className={`tstep ${s.status}`} role="listitem">
-              <span className="tdot">{s.status === 'done' ? <Check size={13} /> : s.status === 'failed' || s.status === 'timeout' ? '!' : null}</span>
-              <span className="tname">{STEP_NAMES[s.id] ?? s.id}</span>
-              <span className="ttime">{s.status === 'done' ? secs(s.at) : s.status === 'timeout' ? 'timed out' : s.status === 'failed' ? 'failed' : 'waiting'}</span>
-            </div>
-          ))}
-        </div>
+        <Pipeline live={false} steps={startup.map((s) => ({ label: STEP_NAMES[s.id] ?? s.id, detail: s.status === 'done' ? secs(s.at) : s.status === 'timeout' ? 'Timed out' : s.status === 'failed' ? 'Failed' : 'Waiting', state: s.status === 'done' ? 'ok' : 'wait' }))} />
         {startup.find((s) => s.failed) && <div style={{ color: 'var(--bad)', fontSize: 13.5, marginTop: 12 }}>{startup.find((s) => s.failed).failed}</div>}
       </section>
 
@@ -235,39 +211,11 @@ export function Health() {
         </div>
       </section>
 
-      <section className="card rise" style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '18px 20px 10px' }}>
-          <span className="eyebrow">Ads this session</span>
-          <span className="mono" style={{ fontSize: 13 }}><span className="dim">revenue </span><span style={{ color: 'var(--ok)' }}>${h.revenue.total.toFixed(4)}</span></span>
-        </div>
-        {h.funnels.length === 0 ? <div className="empty" style={{ padding: 28 }}>No ad activity yet.</div> : (
-          <>
-            <div className="funnel eyebrow" style={{ borderTop: 0, paddingTop: 4, paddingBottom: 8 }}>
-              <span>Format</span><span className="num">Load sent</span><span className="num">Loaded</span><span className="num">Show sent</span><span className="num">Shown</span><span className="num">Closed</span><span className="num">Paid</span><span style={{ textAlign: 'right' }}>Now</span>
-            </div>
-            {h.funnels.map((f) => {
-              const shown = f.format === 'banner' || f.format === 'mrec' || f.format === 'app-open' ? f.displayed : f.shown;
-              const fill = f.loadSent ? Math.min(100, Math.round((f.loaded / f.loadSent) * 100)) : 0;
-              return (
-                <div key={f.key} className="funnel">
-                  <span>
-                    <span style={{ display: 'block', fontWeight: 700 }}>{f.name}</span>
-                    <span className="bar" title={`${fill}% of loads filled`}><i style={{ width: `${fill}%` }} /></span>
-                  </span>
-                  <span className="num mute">{f.loadSent}</span>
-                  <span className="num">{f.loaded}{f.loadFailed ? <span style={{ color: 'var(--warn)' }}> / {f.loadFailed}✕</span> : null}</span>
-                  <span className="num mute">{f.showSent}</span>
-                  <span className="num">{shown}</span>
-                  <span className="num mute">{f.format === 'banner' || f.format === 'mrec' ? '–' : f.closed}</span>
-                  <span className="num" style={{ color: 'var(--ok)' }}>{f.paid}</span>
-                  <span style={{ textAlign: 'right' }}><StateBadge state={f.state} /></span>
-                </div>
-              );
-            })}
-          </>
-        )}
-        <div className="dim" style={{ fontSize: 13, padding: '12px 20px 18px', borderTop: '1px solid var(--line-soft)' }}>"Paid" is the only proof an ad was really seen.</div>
-      </section>
+      <Panel title="Ads this session" actions={<span className="mono pl-page-note">${h.revenue.total.toFixed(4)} reported revenue</span>}>
+        <div className="t-wrap"><table className="t pl-ads-table"><thead><tr><th>Format</th><th className="num">Load sent</th><th className="num">Loaded</th><th className="num">Show sent</th><th className="num">Shown</th><th className="num">Closed</th><th className="num">Paid</th><th>State</th></tr></thead><tbody>{h.funnels.map((f) => <tr key={f.key}><th>{f.name}</th><td className="num mono">{f.loadSent}</td><td className="num mono">{f.loaded}{f.loadFailed > 0 && <span className="badc"> / {f.loadFailed} failed</span>}</td><td className="num mono">{f.showSent}</td><td className="num mono">{['banner', 'mrec', 'app-open'].includes(f.format) ? f.displayed : f.shown}</td><td className="num mono">{['banner', 'mrec'].includes(f.format) ? '—' : f.closed}</td><td className="num mono">{f.paid}</td><td><StateBadge state={f.state} /></td></tr>)}</tbody></table></div>
+        {!h.funnels.length && <div className="empty">No ad activity observed yet.</div>}
+        <div className="pb pl-page-note">Paid callbacks provide evidence that an ad was seen.</div>
+      </Panel>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }} className="rise">
         <CheckCard title="Ad rules" sub={`Checked against this game's AdConfig.${monitor.adRules?.levelSource ? ` Level from ${monitor.adRules.levelSource}.` : ''}`} checks={monitor.adRules?.checks} empty="AdConfig hasn't been applied yet." />
@@ -275,14 +223,14 @@ export function Health() {
       </div>
 
       <Disclosure id="health.advanced" title="Advanced" hint={`Launch timing · other SDKs${extra?.extra?.length ? ` (${extra.extra.length})` : ''} · MAX adapters${h.adapters.length ? ` (${okAdapters}/${h.adapters.length})` : ''}`}>
-        <section className="card" style={{ padding: '18px 22px' }}>
+        <section className="panel" style={{ padding: '18px 22px' }}>
           <div className="eyebrow" style={{ marginBottom: 12 }}>Launch timing</div>
           <LaunchTimeline launch={h.launch} />
           <div className="dim" style={{ fontSize: 13 }}>Firebase and MAX each get 20 s in the startup sequence. If one runs out, the launch continues and it shows as timed out.</div>
         </section>
 
         {extra && (
-          <section className="card" style={{ overflow: 'hidden' }}>
+          <section className="panel" style={{ overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '18px 22px 6px', gap: 10, flexWrap: 'wrap' }}>
               <span className="eyebrow">Other SDKs in the app · not verified by the plugin</span>
               <span className="dim" style={{ fontSize: 13 }}>{extra.apkRead ? 'Found inside the APK and in the logs' : 'Found in the logs (the APK could not be read)'}</span>
@@ -308,7 +256,7 @@ export function Health() {
         )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
-          <section className="card" style={{ flex: '1 1 340px', minWidth: 0, padding: '18px 22px 10px' }}>
+          <section className="panel" style={{ flex: '1 1 340px', minWidth: 0, padding: '18px 22px 10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 10 }}>
               <span className="eyebrow">MAX adapters{h.adapters.length ? ` · ${okAdapters} of ${h.adapters.length}` : ''}</span>
               <button className="btn btn-sm" aria-pressed={onlyProblems} onClick={() => setOnlyProblems(!onlyProblems)}>Only problems</button>

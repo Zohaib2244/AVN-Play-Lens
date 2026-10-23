@@ -3,7 +3,7 @@
 A local web console for testing Unity Android builds. It runs on your Mac or PC and opens in the browser.
 
 - **Connect phones:** USB, or Wi-Fi with a QR code. Paired phones reconnect on their own, and Unity's Build and Run sees them too, even with the tab closed.
-- **Logs:** what your game prints, plus crashes, ANRs and AVN plugin lines. Searchable, filterable, stack traces grouped, alerts for crashes and rule hits, saved to history. Pause (or Space) freezes the view while lines keep coming in; Stop log halts collecting until you start a fresh one.
+- **Logs:** what your game prints, plus crashes, ANRs and AVN plugin lines. Searchable, filterable, stack traces grouped, alerts for crashes and rule hits, saved to history. Pause (or Ctrl/Cmd + Space) freezes the view while lines keep coming in; Stop log halts collecting until you start a fresh one.
 - **Grouped warnings and errors:** in Logs, switch to Grouped: repeats merged with a count, sorted into your game / AVN plugin / other SDKs / Android (safe to ignore), with a plain meaning where known.
 - **Performance:** FPS and frame times (from SurfaceFlinger), CPU, GPU (where the phone allows it), memory, temperature and throttling, sampled every second with graphs of the session. Plus the phone's and the game build's details.
 - **Plugin health:** the launch timeline in ms, the AVN plugin's startup sequence, SDKs it verifies plus other SDKs found in the APK and logs, MAX adapters, ad funnels from load to paid, ad rules checked against the AdConfig values, consent and privacy, remote config with the actual values, and what needs a look.
@@ -131,3 +131,9 @@ docs              plan and the AVN plugin log reference
 ## Safety
 
 PlayLens only listens on 127.0.0.1, so nothing else on the network can reach it. There's no login. Requests are only accepted from PlayLens's own page, so another website open in your browser can't send adb commands to your phone.
+
+## Design
+
+PlayLens uses **AVN UX + AVN Family** from [AVN-Style](https://github.com/Zohaib2244/AVN-Style), with the original stylesheets and pixel SVGs served from `packages/web/public/avn-style/`. The visual reference is AVN-Style’s `board/index.html`. Shared React components are pinned in `packages/web/src/design/`; see its README for provenance.
+
+The game library stays home. The dashboard contains only game registration, game cards and device connection. Each game workspace contains playback controls, its inspection tools and saved sessions; measurements stay on their dedicated screens. On tablets the sidebar becomes a rail; phones use Logs, Performance, Plugin health, Checklist and a More sheet. Use **Ctrl/Cmd + K** to jump to games or pages, **Ctrl/Cmd + /** for shortcuts, and the workspace menu for theme, palette and density. View links retain the selected game and saved capture.

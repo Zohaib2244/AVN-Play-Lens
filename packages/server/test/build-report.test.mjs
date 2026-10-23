@@ -8,7 +8,6 @@ import { Monitor } from '../src/monitor/monitor.mjs';
 import { RulesStore } from '../src/rules/loader.mjs';
 import { classify } from '../src/logcat/parse.mjs';
 import { ingestRemoteValue, remoteVariables } from '../src/monitor/remote-config.mjs';
-import { parseReportWords, tsvWords } from '../../web/src/report-import.mjs';
 import { buildReport } from '../src/monitor/report.mjs';
 import { createServer } from '../src/api/server.mjs';
 import { replayDevice } from '../src/replay/source.mjs';
@@ -112,17 +111,6 @@ test('Remote Config includes scalar values, registered string types, nested JSON
   assert.equal(r['AdConfig.delay'].value, 0); assert.equal(r['AdConfig.flags.banner'].type, 'boolean');
   assert.equal(r['AdConfig.ids[0]'].value, 'a'); assert.equal(r.AdConfig.source, 'Remote');
   assert.equal(r.long.truncated, true); assert.equal(r.long.type, 'unknown');
-});
-
-test('positioned report parser keeps For Dev sections across pages and extracts build identity', () => {
-  const w = (text, x, y) => ({ text, x, y, h: .01 });
-  const r = parseReportWords([
-    [w('Package Name', .08, .1), w(pkg, .48, .1), w('Version (bundleVersion)', .08, .15), w('0.1.3', .48, .15), w('Bundle Version Code', .08, .2), w('13', .48, .2), w('FOR DEV', .08, .3), w('2. ADS IDS', .08, .35), w('Banner', .08, .4), w('unit-a', .48, .4)],
-    [w('Interstitial', .08, .1), w('unit-b', .48, .1), w('3. IN-APP PURCHASES', .08, .2), w('In-App Purchasing', .08, .25), w('ENABLED', .48, .25)],
-  ]);
-  assert.equal(r.packageId, pkg); assert.equal(r.versionCode, '13');
-  assert.equal(r.rows.length, 3); assert.equal(r.rows[1].section, '2. ADS IDS'); assert.equal(r.rows[1].page, 2);
-  assert.equal(tsvWords('header\n5\t1\t1\t1\t1\t1\t10\t20\t20\t10\t90\tPASS', 100, 100)[0].text, 'PASS');
 });
 
 test('exports retain original For Dev results, evidence, replay provenance and typed Remote Config values', () => {

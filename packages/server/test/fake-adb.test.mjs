@@ -45,7 +45,8 @@ test('fake adb: devices, QR pairing, live logcat', { skip: process.platform === 
     assert.equal(started.state, 'waiting');
     writeFileSync(join(state, 'qrname'), started.name); // the phone scans the code
     const done = await until(async () => { const p = await get('pair'); return p.state === 'connected' && p; });
-    assert.equal(done.address, '192.168.1.50:37115');
+    // ADB may auto-connect before mDNS resolves the numeric port; both identify this phone.
+    assert.ok(['192.168.1.50:37115', 'adb-WIFI999-AbCd._adb-tls-connect._tcp'].includes(done.address));
     const wifi = await until(async () => (await get('devices')).find((d) => d.transport === 'wifi'));
     assert.equal(wifi.state, 'device');
     const remembered = JSON.parse(readFileSync(join(home, '.avn-playlens', 'devices.json'), 'utf8'));

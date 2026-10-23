@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/server",
-    "packages/web"
+    "packages/web",
+    "packages/ui"
   ],
   "engines": {
     "node": ">=20"
@@ -17,11 +18,18 @@
     "build": "npm run build -w packages/web",
     "dev:server": "node packages/server/bin/avn-playlens.mjs --dev --replay",
     "dev:web": "npm run dev -w packages/web",
-    "test": "node --test \"packages/server/**/*.test.mjs\" \"packages/web/src/*.test.mjs\"",
-    "package": "node scripts/package.mjs"
+    "test": "npm run test:server && npm run test:web",
+    "package": "node scripts/package.mjs",
+    "typecheck": "tsc -p packages/web/tsconfig.json --noEmit && npm run typecheck -w @avn/ui",
+    "test:server": "node --test \"packages/server/**/*.test.mjs\"",
+    "test:web": "vitest run --config packages/web/vitest.config.ts",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
-    "postject": "^1.0.0-alpha.6"
+    "postject": "^1.0.0-alpha.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

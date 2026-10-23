@@ -10,7 +10,7 @@
 html, body, #root { min-height: 100%; }
 a { color: inherit; }
 button:disabled { cursor: not-allowed; opacity: .45; }
-.playlens-app { height: 100dvh; min-height: 0; border: 0; border-radius: 0; box-shadow: none; overflow: hidden; }
+.playlens-app { height: 100dvh; min-height: 0; border: 0; border-radius: 0; box-shadow: none; overflow: clip; }
 .playlens-app .side { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .playlens-app .workspace { overflow: hidden; }
 .playlens-app .topbar { flex-shrink: 0; }
@@ -236,3 +236,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .playlens-app[data-density="compact"] .data-page .log-row,
   .playlens-app[data-density="compact"] .data-page .erow { min-height: 44px; }
 }
+.pl-table-sort { display: inline-flex; align-items: center; gap: 5px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.pl-table-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.pl-time-series { position: relative; min-width: 0; }
+.pl-uplot { width: 100%; min-width: 0; }
+.pl-uplot .u-wrap { background: transparent; }
+.pl-uplot .u-cursor-x, .pl-uplot .u-cursor-y { border-color: var(--line-strong); }

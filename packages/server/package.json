@@ -7,7 +7,7 @@
     "avn-playlens": "bin/avn-playlens.mjs"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.2",
     "ws": "^8.18.0"
   }
 }

@@ -68,7 +68,11 @@ See [the automated game QA plan](docs/QA_PLAN.md) for the proposed runner, Unity
 ```bash
 npm run dev:server   # API on 7420 with the replay device
 npm run dev:web      # Vite on http://localhost:5173 with hot reload
-npm test             # parsers, adb handling, server, and an end-to-end run against a fake adb
+npm run typecheck    # strict TypeScript for the frontend and shared UI
+npm test             # Node backend tests + Vitest frontend tests
+npm run build        # type-check and build the static frontend
+npm run test:e2e     # Playwright: desktop, tablet, phone against isolated replay data
+npm run check        # all of the above
 ```
 
 ## Rules files
@@ -137,3 +141,11 @@ PlayLens only listens on 127.0.0.1, so nothing else on the network can reach it.
 PlayLens uses **AVN UX + AVN Family** from [AVN-Style](https://github.com/Zohaib2244/AVN-Style), with the original stylesheets and pixel SVGs served from `packages/web/public/avn-style/`. The visual reference is AVN-Style’s `board/index.html`. Shared React components are pinned in `packages/web/src/design/`; see its README for provenance.
 
 The game library stays home. The dashboard contains only game registration, game cards and device connection. Each game workspace contains playback controls, its inspection tools and saved sessions; measurements stay on their dedicated screens. On tablets the sidebar becomes a rail; phones use Logs, Performance, Plugin health, Checklist and a More sheet. Use **Ctrl/Cmd + K** to jump to games or pages, **Ctrl/Cmd + /** for shortcuts, and the workspace menu for theme, palette and density. View links retain the selected game and saved capture.
+
+## Frontend architecture
+
+The frontend follows AVN-Style’s stack: React 18, strict TypeScript and Vite, the `@avn/ui` workspace package, original AVN plain CSS/fonts/icons, Motion and Radix, TanStack Router/Query/Table/Virtual, and uPlot for live time series. Vitest covers frontend logic and components; Playwright covers end-to-end flows at three widths.
+
+TanStack Router owns the page and URL filter/sort/density state. TanStack Query owns HTTP data with device/game-specific cache keys, cancellable requests and local-server-friendly network settings. One persistent capture provider owns WebSocket messages, bounded live log buffers, performance samples and stream identity; switching inspection pages does not restart capture. Query and Router remain independent of the Node server, ADB integration and single-executable packaging.
+
+`npm run test:e2e` requires Chrome (or install Playwright Chromium and remove `channel: 'chrome'` in `playwright.config.ts`). It serves the production build on port 7431 with a temporary game library and snapshot directory. Run `npm run build` first. Reports and screenshots are written to the ignored `playwright-report/` and `test-results/` directories.

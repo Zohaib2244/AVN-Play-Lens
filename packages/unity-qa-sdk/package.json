@@ -1,0 +1,13 @@
+{
+  "name": "com.avn.qa",
+  "version": "0.1.0",
+  "displayName": "AVN QA SDK",
+  "description": "Debug-only QA bridge for AVN games. Exposes level, state, UI and named actions to AVN PlayLens over a loopback socket. Compiled only when the AVN_QA scripting define is set.",
+  "unity": "2021.3",
+  "keywords": ["qa", "testing", "avn", "playlens"],
+  "author": { "name": "AVN" },
+  "samples": [
+    { "displayName": "Plugin hooks (ads, IAP)", "description": "Registers the standard ad.* and iap.* actions against the AVN plugin. Wire the TODO lines once in the plugin.", "path": "Samples~/PluginHooks" },
+    { "displayName": "Game adapter example", "description": "Shows how a game registers its level provider, game state and level.* actions.", "path": "Samples~/GameAdapter" }
+  ]
+}

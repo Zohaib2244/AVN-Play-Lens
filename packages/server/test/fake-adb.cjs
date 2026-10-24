@@ -26,7 +26,12 @@ else if (cmd === 'track-devices') {
   out(s);
 } else if (cmd === 'pair') { fs.writeFileSync(st('paired'), '1'); fs.writeFileSync(st('connected'), '1'); out(`Successfully paired to ${args[1]} [guid=adb-WIFI999-AbCd]\n`); }
 else if (cmd === 'connect') { fs.writeFileSync(st('connected'), '1'); out(`connected to ${args[1]}\n`); }
-else if (cmd === 'shell') {
+else if (cmd === 'forward') {
+  if (args[1] === '--remove') out('');
+  else { const port = process.env.FAKE_BRIDGE_PORT || '7421'; out(port + '\n'); }
+} else if (cmd === 'exec-out') {
+  process.stdout.write(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(120, 7)]));
+} else if (cmd === 'shell') {
   const c = args.slice(1).join(' ');
   const active = () => fs.existsSync(st('active-package')) ? fs.readFileSync(st('active-package'), 'utf8') : 'com.avn.demo';
   const propsFile = st('props.json');
@@ -37,6 +42,10 @@ else if (cmd === 'shell') {
     if (c.startsWith('monkey')) { fs.writeFileSync(st('active-package'), pkg); out('Events injected: 1\n'); }
     else if (active() === pkg) fs.writeFileSync(st('active-package'), '');
   }
+  else if (c.startsWith('date ')) out((Date.now() / 1000).toFixed(9) + '\n');
+  else if (c.startsWith('wm size')) out('Physical size: 1080x2400\n');
+  else if (c.startsWith('input ')) { fs.appendFileSync(st('actions.jsonl'), JSON.stringify({ command: c, at: Date.now() }) + '\n'); if (c.startsWith('input keyevent 3')) fs.writeFileSync(st('active-package'), 'com.android.launcher'); }
+  else if (c.startsWith('uiautomator')) out('<?xml version="1.0"?><hierarchy><node bounds="[1000,60][1060,120]" clickable="true" content-desc="Close" /></hierarchy>\n');
   else if (c.startsWith('getprop debug.firebase')) out(`${props['debug.firebase.analytics.app'] || ''}\n${props['log.tag.FA'] || ''}\n${props['log.tag.FA-SVC'] || ''}\n`);
   else if (c.startsWith('setprop')) {
     for (const part of c.split(';')) { const m = /setprop (\S+) (\S+)/.exec(part.trim()); if (m) props[m[1]] = m[2]; }

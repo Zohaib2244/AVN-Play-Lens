@@ -6,7 +6,7 @@ import { api, connectSocket } from './api.js';
 
 const AppContext = createContext(null);
 const MAX_LINES = 50000;
-const GAME_VIEWS = new Set(['snapshooter', 'game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'remote-config', 'checklist', 'checklist-setup', 'game-sessions']);
+const GAME_VIEWS = new Set(['qa', 'snapshooter', 'game', 'logs', 'performance', 'health', 'firebase', 'firebase-setup', 'remote-config', 'checklist', 'checklist-setup', 'game-sessions']);
 const ALERT_KINDS = { exception: 'Unity exception', 'java-crash': 'App crashed (Java)', 'native-crash': 'App crashed (native)', anr: 'App not responding (ANR)' };
 
 export function AppProvider({ children }) {
@@ -49,6 +49,7 @@ export function AppProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [alerts, setAlerts] = useState(true);
   const [lastReport, setLastReport] = useState(null);
+  const [qaVersion, setQaVersion] = useState(0);
   const [focusEntry, setFocusEntry] = useState(null);
   const lines = useRef([]);
   const groups = useRef(new Map());   // warnings/errors grouped by owner + message
@@ -97,6 +98,7 @@ export function AppProvider({ children }) {
       if (msg.type === 'devices') return setDevices(msg.devices);
       if (msg.type === 'pair') return setPair(msg);
       if (msg.type === 'error') return showToast({ title: 'Something went wrong', msg: msg.message });
+      if (msg.type === 'qa.run') return setQaVersion((v) => v + 1);
       if (!collectionAllowed.current && ['log.batch', 'monitor', 'perf', 'alert', 'run.report'].includes(msg.type)) return;
       if (msg.type === 'run.report') return setLastReport(msg);
       if (msg.streamId !== undefined && msg.streamId !== streamId.current) return;
@@ -289,9 +291,9 @@ export function AppProvider({ children }) {
     games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, setHistoryGame, viewGameSessions,
     session, captureVersion, historyVersion, setHistoryVersion, newSession, saveSession, archivedId, reviewSession,
     lines, version, stream, rate, monitor, sessionId, toast, setToast, showToast, alerts, setAlerts, lastReport, setLastReport,
-    focusEntry, setFocusEntry, stopped, setStopped, groups, perf, perfSummary, perfVersion,
+    focusEntry, setFocusEntry, stopped, setStopped, groups, perf, perfSummary, perfVersion, qaVersion,
     showInLogs: (entryId) => { setFocusEntry(entryId); setView('logs'); },
-  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion, session, captureVersion, historyVersion, newSession, saveSession, archivedId, reviewSession, games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, viewGameSessions, game, inGameWorkspace, openGame, archiveReturn]);
+  }), [status, devices, pair, online, view, serial, selectDevice, pkg, follow, apps, refreshApps, send, version, stream, rate, monitor, sessionId, toast, showToast, alerts, lastReport, focusEntry, stopped, perfSummary, perfVersion, qaVersion, session, captureVersion, historyVersion, newSession, saveSession, archivedId, reviewSession, games, gamesLoaded, gamesError, reloadGames, gameInventory, inventoryError, actionBusy, selectGame, performGameAction, historyGame, viewGameSessions, game, inGameWorkspace, openGame, archiveReturn]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

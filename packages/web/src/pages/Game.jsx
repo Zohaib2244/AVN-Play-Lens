@@ -12,6 +12,7 @@ const VIEWS = [
   ['remote-config', 'Remote Config', 'Inspect fetched settings and level sequences.', '05'],
   ['checklist', 'Checklist', 'Run the checks for this game’s test session.', '06'],
   ['snapshooter', 'Level Snapshooter', 'Capture every level, browse images and share a ZIP.', '07'],
+  ['qa', 'QA runs', 'Run a plan on the phone: startup, ads, levels, purchases, with a report.', '08'],
 ];
 export function Game() {
   const { game, gameInventory, serial, device, devices, selectDevice, pkg, setView, performGameAction, actionBusy, refreshApps, stopped, setStopped, stream, reloadGames, viewGameSessions } = useApp();

@@ -67,6 +67,7 @@ const GAME_NAV = [
   { id: 'remote-config', title: 'Remote Config', short: 'Config', icon: 'clipboard', sub: () => ({ text: 'Fetched values' }) },
   { id: 'checklist', title: 'Checklist', short: 'Checklist', icon: 'clipboard', sub: (st) => st.checklist, also: ['checklist-setup'] },
   { id: 'snapshooter', title: 'Level Snapshooter', short: 'Levels', icon: 'camera', sub: () => ({ text: 'Screenshots & ZIP export' }) },
+  { id: 'qa', title: 'QA runs', short: 'QA', icon: 'shield', sub: () => ({ text: 'Automated checks' }) },
   { id: 'game-sessions', title: 'Game sessions', short: 'History', icon: 'logs', sub: () => ({ text: 'This game’s captures' }) },
 ];
 

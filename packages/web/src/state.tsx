@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { api, connectSocket, errorMessage } from "./api";
+import { preferredDevice } from "./device-selection";
 import type { View } from "./navigation";
 import { validateSearch } from "./navigation";
 import { resourceKey, useResource } from "./query";
@@ -164,7 +165,7 @@ function useAppState() {
   const [captureVersion, setCaptureVersion] = useState(0);
   const [captureRequest, setCaptureRequest] = useState(0);
   const [historyVersion, setHistoryVersion] = useState(0);
-  const disposition = useRef("save");
+  const disposition = useRef("keep");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [alerts, setAlerts] = useState(true);
   const [lastReport, setLastReport] = useState<Report | null>(null);
@@ -292,7 +293,10 @@ function useAppState() {
       previousPackage,
       nextPackage,
     }: { previousPackage?: string; nextPackage?: string } = {}) => {
-      await query.invalidateQueries({ queryKey: resourceKey("games") });
+      await query.invalidateQueries(
+        { queryKey: resourceKey("games") },
+        { throwOnError: true },
+      );
       await query.invalidateQueries({ queryKey: resourceKey(inventoryPath) });
       if (previousPackage && nextPackage && pkg === previousPackage)
         setPkg(nextPackage);
@@ -307,11 +311,10 @@ function useAppState() {
     setFollow(false);
   }, []);
 
-  // Keep a sensible device selected: the current one if still there, else the first ready phone.
+  // Prefer a real phone even when a simulator was selected before it arrived.
   useEffect(() => {
-    const ready = devices.filter((d) => d.state === "device");
-    if (!ready.some((d) => d.serial === serial)) {
-      const next = ready.find((d) => !d.replay) ?? ready[0] ?? null;
+    const next = preferredDevice(devices, serial);
+    if ((next?.serial ?? null) !== serial) {
       if (next) selectDevice(next);
       else setSerial(null);
     }
@@ -371,7 +374,7 @@ function useAppState() {
       return;
     }
     if (stopped) {
-      send({ type: "stream.stop", previous: "save" });
+      send({ type: "stream.stop", previous: "keep" });
       captureIdentity.current = null;
       setStream((s) => ({ ...s, state: "stopped" }));
       return;
@@ -391,7 +394,7 @@ function useAppState() {
         streamId: id,
         previous: disposition.current,
       });
-      disposition.current = "save";
+      disposition.current = "keep";
       captureIdentity.current = identity;
     }
     return () => send({ type: "stream.pause", streamId: id });
@@ -408,10 +411,11 @@ function useAppState() {
   ]);
 
   const newSession = useCallback(
-    (previous = "save") => {
+    (previous = "keep") => {
       if (previous === "save")
         send({ type: "session.save", streamId: streamId.current });
-      else send({ type: "session.discard", id: sessionId });
+      else if (previous === "discard")
+        send({ type: "session.discard", id: sessionId });
       disposition.current = previous;
       streamId.current++; // reject late batches from the capture being cleared
       resetCapture();
@@ -441,12 +445,15 @@ function useAppState() {
     [inGameWorkspace, navigate, pkg],
   );
 
-  const selectGame = useCallback((packageId: string) => {
-    setFollow(false);
-    setPkg(packageId);
-  }, []);
-  const openGame = useCallback(
+  const selectGame = useCallback(
     (packageId: string) => {
+      setFollow(false);
+      setPkg(packageId);
+    },
+    [setPkg],
+  );
+  const openGame = useCallback(
+    (packageId: string, destination: View = "game") => {
       setFollow(false);
       updatePackage(packageId);
       void navigate({
@@ -454,7 +461,7 @@ function useAppState() {
         resetScroll: false,
         search: (old) => ({
           ...validateSearch(old),
-          view: "game",
+          view: destination,
           game: packageId,
           session: undefined,
         }),
@@ -505,7 +512,7 @@ function useAppState() {
             };
           });
           selectGame(packageId);
-          if (pkg === packageId) newSession("save");
+          if (pkg === packageId) newSession();
           else setStopped(false);
           await ready;
         }

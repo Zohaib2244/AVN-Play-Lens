@@ -6,6 +6,7 @@ import { api, errorMessage } from "../api";
 import { useApp } from "../state";
 import type { Game } from "../types";
 import { GameIcon } from "./GameIcon";
+import { prepareGameIcon } from "../game-icons";
 export function GameEditor({
   game = null,
   onDone,
@@ -20,23 +21,20 @@ export function GameEditor({
   const [icon, setIcon] = useState(game?.icon || null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const upload = (ev: ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+  const upload = async (ev: ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
     if (!file) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-      file.size > 250 * 1024
-    ) {
-      setError("Choose a PNG, JPEG or WebP icon smaller than 250 KB.");
-      return;
+    setUploading(true);
+    setError("");
+    try {
+      setIcon(await prepareGameIcon(file));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setUploading(false);
+      ev.target.value = "";
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setIcon(String(reader.result));
-      setError("");
-    };
-    reader.onerror = () => setError("Could not read this image.");
-    reader.readAsDataURL(file);
   };
   const mutation = useMutation({
     mutationFn: () =>
@@ -80,7 +78,7 @@ export function GameEditor({
         <GameIcon game={{ name: name || "Game", icon }} />
         <div>
           <label className="btn btn-sm icon-upload">
-            Choose icon
+            {uploading ? "Resizing icon…" : "Choose icon"}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
@@ -140,7 +138,7 @@ export function GameEditor({
         </p>
       )}
       <div style={{ marginTop: 18 }}>
-        <button className="btn btn-warm" disabled={busy}>
+        <button className="btn btn-warm" disabled={busy || uploading}>
           {busy ? "Saving…" : "Save game"}
         </button>
       </div>

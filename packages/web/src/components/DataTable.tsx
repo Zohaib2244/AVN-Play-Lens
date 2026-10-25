@@ -136,7 +136,7 @@ export function DataTable<T>({
               <tr key={row.id}>
                 {row.getVisibleCells().map((cell, index) => (
                   <td key={cell.id} className={columns[index]?.className}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    {columns[index]?.cell(row.original, row.index)}
                   </td>
                 ))}
               </tr>,

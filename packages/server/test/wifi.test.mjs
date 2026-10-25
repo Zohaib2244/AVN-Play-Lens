@@ -129,6 +129,12 @@ test('saved device API lists, disconnects, reconnects and forgets; rejects unkno
   const base = 'http://127.0.0.1:7497/api/devices/saved';
   const id = serviceId(svc.name);
   assert.equal((await (await fetch(base)).json())[0].id, id);
+  const preference = await fetch(`${base}/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autoReconnect: false }) });
+  assert.equal(preference.status, 200);
+  assert.equal(store.list()[0].autoReconnect, false);
+  assert.equal(online.has(serial), true, 'turning off auto-reconnect does not disconnect the active phone');
+  assert.equal((await fetch(`${base}/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autoReconnect: 'yes' }) })).status, 400);
+  assert.equal((await fetch(`${base}/${id}`, { method: 'PATCH', headers: { origin: 'http://evil.example', 'content-type': 'application/json' }, body: JSON.stringify({ autoReconnect: true }) })).status, 403);
   for (const action of ['disconnect', 'reconnect', 'forget']) {
     const res = await fetch(`${base}/${id}/${action}`, { method: 'POST' });
     assert.equal(res.status, 200);

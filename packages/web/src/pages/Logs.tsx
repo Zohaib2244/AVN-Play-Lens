@@ -8,7 +8,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { Icon, PageHead } from "../components/bits";
-import { GamePicker } from "../components/GamePicker";
 import { Grouped } from "../components/Grouped";
 import { ActionButton, LiveBars, Menu, SkeletonLog } from "../components/ui";
 import { useViewPreference, useViewState } from "../route-state";
@@ -443,7 +442,6 @@ export function Logs() {
             </button>
           ))}
         </div>
-        <GamePicker />
       </div>
 
       {(q || filter !== "all" || paused) && (

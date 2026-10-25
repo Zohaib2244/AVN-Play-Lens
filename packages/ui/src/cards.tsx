@@ -151,10 +151,11 @@ export type PipelineStep = { label: string; detail: string; state: 'ok' | 'done'
 /** Pipeline timeline: Verified steps are green, Done steps teal, the waiting step pulses. Packets move while live. */
 export function Pipeline({ steps, live = true, onVerify }: { steps: PipelineStep[]; live?: boolean; onVerify?: (index: number) => void }): ReactElement {
   return (
-    <div className="timeline" style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}>
+    <div className="timeline pl-pipeline" style={{ ['--step-count' as string]: Math.max(1, steps.length) }}>
       {steps.map((s, i) => (
         <div key={s.label} className={cx('ts', s.state === 'wait' && 'wait', s.state === 'done' && 'done')} style={{ ['--i' as string]: i }}>
           <i>{s.state === 'wait' ? null : <Icon name="check" />}</i>
+          {i < steps.length - 1 ? <span className="pl-pipeline-connector" data-complete={s.state !== 'wait' && steps[i + 1]?.state !== 'wait'} aria-hidden="true" /> : null}
           <b>{s.label}</b>
           <span>{s.detail}</span>
           {s.state === 'done' && onVerify ? <Button size="sm" variant="ghost" className="chk" onClick={() => onVerify(i)}>Check now</Button> : null}

@@ -8,10 +8,11 @@ import {
   Panel,
   Tag,
 } from "@avn/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, errorMessage } from "../api";
 import { DeviceRows, useProfile } from "../components/DeviceProfile";
 import { SkeletonRows } from "../components/ui";
+import { DeviceArt } from "../components/DeviceArt";
 import { useResource } from "../query";
 import { deviceName, stateHint, useApp } from "../state";
 import type { Device, SavedDevice } from "../types";
@@ -46,8 +47,31 @@ function WifiControls({
   onChange: (action?: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [savingReconnect, setSavingReconnect] = useState(false);
   const [error, setError] = useState("");
   const [unpair, setUnpair] = useState(false);
+  const [reconnect, setReconnect] = useState(saved.autoReconnect !== false);
+  useEffect(
+    () => setReconnect(saved.autoReconnect !== false),
+    [saved.autoReconnect],
+  );
+  const toggleReconnect = async (enabled: boolean) => {
+    setReconnect(enabled);
+    setSavingReconnect(true);
+    setError("");
+    try {
+      await api(`devices/saved/${encodeURIComponent(saved.id)}`, {
+        method: "PATCH",
+        body: { autoReconnect: enabled },
+      });
+      await onChange();
+    } catch (err) {
+      setReconnect(saved.autoReconnect !== false);
+      setError(errorMessage(err));
+    } finally {
+      setSavingReconnect(false);
+    }
+  };
   const manage = async (action: string) => {
     setBusy(true);
     setError("");
@@ -77,9 +101,22 @@ function WifiControls({
         <Button size="sm" variant="ghost" onClick={() => setUnpair(true)}>
           Forget device…
         </Button>
-        <span className="pl-page-note">
-          Auto-reconnect {saved.autoReconnect === false ? "paused" : "on"}
-        </span>
+        <label className="pl-reconnect-toggle">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={reconnect}
+            disabled={busy || savingReconnect}
+            onChange={(e) => toggleReconnect(e.target.checked)}
+            aria-label={`Auto-reconnect ${saved.label || saved.id}`}
+          />
+          <span>
+            Auto-reconnect <b>{reconnect ? "on" : "off"}</b>
+          </span>
+          <span className="pl-reconnect-feedback" role="status">
+            {savingReconnect ? "Saving…" : ""}
+          </span>
+        </label>
       </div>
       {error && (
         <p className="badc" role="alert">
@@ -147,7 +184,16 @@ export function Devices() {
           return (
             <Panel
               key={d.serial}
-              title={deviceName(d)}
+              className={d.serial === serial ? "pl-device-active" : undefined}
+              title={
+                <span className="pl-device-title">
+                  <DeviceArt
+                    id={remembered?.id ?? d.serial}
+                    replay={d.replay}
+                  />
+                  <span>{d.replay ? "Demo simulator" : deviceName(d)}</span>
+                </span>
+              }
               subtitle={
                 d.replay
                   ? "Simulated device · saved log replay"
@@ -159,8 +205,24 @@ export function Devices() {
                       .join(" · ") || d.serial
               }
               actions={
-                <Tag kind={hint ? "warn" : d.replay ? "plain" : "ok"}>
-                  {hint ? "Needs attention" : d.replay ? "Replay" : "Connected"}
+                <Tag
+                  kind={
+                    d.serial === serial
+                      ? "info"
+                      : hint
+                        ? "warn"
+                        : d.replay
+                          ? "plain"
+                          : "ok"
+                  }
+                >
+                  {d.serial === serial
+                    ? "Active device"
+                    : hint
+                      ? "Needs attention"
+                      : d.replay
+                        ? "Simulator"
+                        : "Connected"}
                 </Tag>
               }
             >
@@ -176,19 +238,39 @@ export function Devices() {
                   <span className="mono dim pl-page-note">{d.serial}</span>
                 </div>
                 {hint && <p className="warnc">{hint}</p>}
-                <div className="row-wrap">
+                <div className="pl-use-device">
                   <Button
-                    disabled={d.serial === serial || d.state !== "device"}
+                    variant={d.serial === serial ? "ghost" : "primary"}
+                    disabled={
+                      d.serial === serial ||
+                      d.state !== "device" ||
+                      (!!d.replay && devices.some((phone) => !phone.replay))
+                    }
                     onClick={() => selectDevice(d)}
                   >
                     {d.serial === serial
-                      ? "Selected device"
+                      ? "Currently active"
                       : "Use this device"}
                   </Button>
                   <Button variant="ghost" onClick={() => setDetails(d)}>
                     Device details <Icon name="arrow" />
                   </Button>
                 </div>
+                {d.replay && (
+                  <p className="pl-page-note">
+                    Plays saved demo logs.{" "}
+                    {devices.some((phone) => !phone.replay)
+                      ? "Your real phone takes priority. Disconnect it to use the simulator."
+                      : "No data comes from a live phone."}
+                  </p>
+                )}
+                {!remembered && !d.replay && (
+                  <p className="pl-page-note">
+                    {d.transport === "wifi"
+                      ? "Pair this phone to save its auto-reconnect preference."
+                      : "USB reconnects when the cable is plugged in. Auto-reconnect applies to paired Wi-Fi devices."}
+                  </p>
+                )}
                 {remembered && (
                   <WifiControls saved={remembered} connected onChange={load} />
                 )}
@@ -201,7 +283,12 @@ export function Devices() {
           .map((s) => (
             <Panel
               key={s.id}
-              title={s.label || s.id}
+              title={
+                <span className="pl-device-title">
+                  <DeviceArt id={s.id} />
+                  <span>{s.label || s.id}</span>
+                </span>
+              }
               actions={<Tag kind="plain">Disconnected</Tag>}
             >
               <div className="pb">

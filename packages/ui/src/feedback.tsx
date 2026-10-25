@@ -159,7 +159,9 @@ export function ToastProvider({ children }: { children: ReactNode }): ReactEleme
       usedId = r.id;
       return r.list;
     });
-    setNotes((n) => [{ id: ++noteRef.current, kind, title: t.title, message: t.message ?? '', at: Date.now(), read: false }, ...n].slice(0, 50));
+    // Updaters must be pure: StrictMode may invoke them twice.
+    const note = { id: ++noteRef.current, kind, title: t.title, message: t.message ?? '', at: Date.now(), read: false };
+    setNotes((n) => [note, ...n.filter((old) => !(old.kind === kind && old.title === t.title && old.message === note.message))].slice(0, 50));
     return usedId;
   }, []);
 

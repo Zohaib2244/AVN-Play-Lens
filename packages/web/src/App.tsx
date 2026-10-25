@@ -1,6 +1,5 @@
 import { PlayLensShell, ToastBridge } from "./components/AppShell";
 import { PageTransition } from "./components/PageTransition";
-import { SessionControls } from "./components/SessionControls";
 import { Checklist, ChecklistSetup } from "./pages/Checklist";
 import { Connect } from "./pages/Connect";
 import { Devices } from "./pages/Devices";
@@ -51,11 +50,6 @@ export function App() {
         : view;
   return (
     <PlayLensShell>
-      {inGameWorkspace && view !== "saved-session" && (
-        <div className="pl-session">
-          <SessionControls key={`controls-${captureVersion}`} />
-        </div>
-      )}
       <PageTransition pageKey={pageKey}>
         <Page
           key={

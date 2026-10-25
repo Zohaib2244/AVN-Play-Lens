@@ -85,7 +85,7 @@ export class SessionRecorder {
     await new Promise((resolve, reject) => this.file.write('', (err) => err ? reject(err) : resolve()));
     this.persist(summary, options);
   }
-  async finish(summary = {}, { save = true, ...options } = {}) {
+  async finish(summary = {}, { save = this.saved, ...options } = {}) {
     if (this.done) return this.closed;
     this.done = true;
     this.gzip.end();

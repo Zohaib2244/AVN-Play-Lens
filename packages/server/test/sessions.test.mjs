@@ -114,6 +114,7 @@ test('WebSocket session changes isolate Firebase, support save/discard, and spli
   stdout.write(`${((Date.now() + 10) / 1000).toFixed(3)} 999 999 I FA: Logging event (FE): foreign_app, Bundle[{level=99}]\n`);
   send({ type: 'stream.pause', streamId: 1 });
   await until(() => messages.find((m) => m.type === 'session' && m.streamId === 1 && m.paused));
+  assert.equal(sessionDetails(first.id), null, 'leaving a game page must not auto-save its capture');
   const beforePause = messages.filter((m) => m.type === 'log.batch').length;
   emit('FA', 'Logging event (FE): during_pause, Bundle[{level=9}]');
   await pause(120);
@@ -174,12 +175,20 @@ test('a fresh capture does not import historical cumulative ad counters', () => 
   assert.equal(h.funnels['Ad.Interstitial.0'].loaded, 2);
 });
 
-test('a short session with Firebase events is retained on a game boundary', async () => {
+test('a short session with Firebase events is retained when explicitly saved on a game boundary', async () => {
   const rec = capture();
   rec.write(entry('one Firebase event'));
-  await rec.finish({ events: 1 }, { snapshot: { firebase: { rows: [{ name: 'short_session_event' }] } } });
+  await rec.finish({ events: 1 }, { save: true, snapshot: { firebase: { rows: [{ name: 'short_session_event' }] } } });
   assert.equal(sessionDetails(rec.id).snapshot.firebase.rows[0].name, 'short_session_event');
   deleteSession(rec.id);
+});
+
+test('unsaved captures are discarded by default even with many lines and Firebase evidence', async () => {
+  const rec = capture();
+  for (let i = 0; i < 100; i++) rec.write(entry(`unsaved ${i}`, i));
+  await rec.finish({ events: 1 }, { snapshot: { firebase: { rows: [{ name: 'unsaved_event' }] } } });
+  assert.equal(sessionDetails(rec.id), null);
+  assert.ok(!readdirSync(SESSIONS_DIR).some((file) => file.startsWith(rec.id)));
 });
 
 test('a subprocess launch does not reset the main game ad state', () => {

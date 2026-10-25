@@ -6,13 +6,12 @@ import {
   LoadBar,
   PageHead,
   PageSkeleton,
-  Tag,
 } from "@avn/ui";
 import { useMemo, useState } from "react";
 import { useViewState } from "../route-state";
 import { useApp } from "../state";
 import { GameEditor } from "./GameEditor";
-import { GameIcon } from "./GameIcon";
+import { GameCard } from "./GameCard";
 
 export function GameLibrary() {
   const {
@@ -137,43 +136,7 @@ export function GameLibrary() {
             gameInventory.serial === serial
               ? gameInventory.games.find((x) => x.id === g.id)
               : null;
-          return (
-            <button
-              className="gcard"
-              key={g.id}
-              onClick={() => openGame(g.packageId)}
-              aria-label={`Open ${g.name}`}
-            >
-              <span className="gc-top">
-                <span className="gc-ic">
-                  <GameIcon game={g} size={44} />
-                </span>
-                <Tag kind="plain">Quiet</Tag>
-              </span>
-              <span>
-                <span className="gc-name">{g.name}</span>
-                <span className="gc-id mono">{g.packageId}</span>
-              </span>
-              <span className="gc-pills">
-                <span className="pill">Android</span>
-                <span className="pill">
-                  {!device
-                    ? "No device"
-                    : !info
-                      ? "Checking version…"
-                      : info.installed
-                        ? `v${info.versionName || "?"} · ${info.versionCode ?? "?"}`
-                        : "Not installed"}
-                </span>
-              </span>
-              <span className="gc-foot">
-                <span>Tracking paused</span>
-                <span className="gc-last">
-                  Open workspace <Icon name="arrow" />
-                </span>
-              </span>
-            </button>
-          );
+          return <GameCard key={g.id} game={g} info={info} />;
         })}
         {!query && !installedOnly && (
           <button className="gcard add" onClick={() => setAdding(true)}>

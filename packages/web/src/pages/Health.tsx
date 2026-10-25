@@ -6,6 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { StateBadge } from "../components/StateBadge";
 import { Disclosure, Skeleton } from "../components/ui";
 import dora from "../design/dora.svg?raw";
+import { healthIssues } from "../health-issues";
 import { useViewState } from "../route-state";
 import { clock, deviceName, secs, useApp } from "../state";
 import type {
@@ -127,7 +128,7 @@ function sdkState(card: SdkCardData) {
   return card.state || "Not seen";
 }
 
-function SdkCard({ card, extra }: { card: SdkCardData; extra?: ReactNode }) {
+function SdkCard({ card }: { card: SdkCardData }) {
   const state = sdkState(card);
   return (
     <div className={`panel sdk${card.notUsed || card.noLogs ? " na" : ""}`}>
@@ -167,15 +168,15 @@ function SdkCard({ card, extra }: { card: SdkCardData; extra?: ReactNode }) {
           <span className="mono dim" style={{ fontSize: 12.5 }}>
             {card.upInMs != null
               ? `up in ${secs(card.upInMs)}`
-              : card.waitingMs != null
+              : card.waitingMs != null && card.state !== "Initialized"
                 ? `waiting ${secs(card.waitingMs)}`
                 : card.state
                   ? ""
                   : "no line yet"}
           </span>
-          {(extra || card.state === "Failed") && (
+          {card.state === "Failed" && (
             <span className="mute" style={{ fontSize: 13.5, lineHeight: 1.45 }}>
-              {card.state === "Failed" ? card.message : extra}
+              {card.message}
             </span>
           )}
         </>
@@ -260,9 +261,7 @@ function CheckCard({
             style={{ margin: "4px 22px 16px" }}
             onClick={() => setAll(!all)}
           >
-            {all
-              ? "Show only what needs a look"
-              : `Show all ${list.length} checks`}
+            {all ? "Show only issues" : `Show all ${list.length} checks`}
           </button>
         </>
       )}
@@ -407,50 +406,11 @@ export function Health() {
   const okAdapters = h.adapters.filter(
     (a) => a.status === "InitializedSuccess",
   ).length;
-  const mc = h.maxConfig;
   const extra = monitor.sdkList;
   const startedLabel = h.appStart ? `launched ${clock(h.appStart, false)}` : "";
 
   // Everything that needs a look, in one list: rule hits, broken ad rules, privacy problems.
-  const issues: {
-    id: string;
-    severity: string;
-    name: string;
-    detail?: string;
-    count?: number;
-    entryId?: number;
-  }[] = [
-    ...(monitor.flags ?? [])
-      .filter((f) => f.severity !== "info")
-      .map((f) => ({
-        id: f.id,
-        severity: f.severity,
-        name: f.name,
-        detail: f.message,
-        count: f.count,
-        entryId: f.entryId,
-      })),
-    ...(monitor.adRules?.checks ?? [])
-      .filter((c) => c.status === "problem")
-      .map((c) => ({
-        id: `ad:${c.id}`,
-        severity: "warning",
-        name: c.name,
-        detail: `${c.result} (AdConfig ${c.key}=${String(c.value ?? "")})`,
-      })),
-    ...(monitor.privacy ?? [])
-      .filter((c) => c.status === "problem")
-      .map((c) => ({
-        id: `pv:${c.id}`,
-        severity: "warning",
-        name: c.name,
-        detail: c.result,
-      })),
-  ].sort(
-    (a, b) =>
-      (a.severity === "critical" ? -1 : 0) -
-      (b.severity === "critical" ? -1 : 0),
-  );
+  const issues = healthIssues(monitor);
   const shownIssues = allIssues ? issues : issues.slice(0, 3);
   const readySdks = h.sdks.filter(
     (c) => c.state === "Initialized" && c.key !== "SDK.RemoteConfig",
@@ -469,7 +429,7 @@ export function Health() {
   const healthy = !issues.length && !h.debugInRelease;
 
   return (
-    <main className="content" style={{ gap: 22 }}>
+    <main className="content pl-health" style={{ gap: 22 }}>
       <PageHead
         title="Plugin health"
         sub={`AVN plugin · ${pkg} on ${deviceName(device)}${startedLabel ? ` · ${startedLabel}` : ""}`}
@@ -479,37 +439,13 @@ export function Health() {
         )}
       </PageHead>
 
-      {h.debugInRelease && (
-        <div
-          className="panel"
-          style={{
-            padding: "16px 20px",
-            borderColor: "var(--bad)",
-            background: "var(--bad-soft)",
-            lineHeight: 1.6,
-          }}
-        >
-          <b style={{ color: "var(--bad)" }}>
-            Plugin debug logging is on in a release build.
-          </b>{" "}
-          <span className="mute">
-            Remove USE_AVNADS_PLUGIN_DEBUG before shipping.
-          </span>
-        </div>
-      )}
-      {h.debugLogs === "off" && (
-        <div className="panel note">
-          <b style={{ color: "var(--warn)" }}>
-            Only warnings and errors are visible.
-          </b>{" "}
-          This build doesn't define USE_AVNADS_PLUGIN_DEBUG, so most checks
-          below can't run.
-        </div>
-      )}
-
       <StatusStrip
         live={false}
-        status={healthy ? "No issues observed" : `${issues.length} need a look`}
+        status={
+          healthy
+            ? "No issues observed"
+            : `${issues.length} ${issues.length === 1 ? "issue" : "issues"} to fix`
+        }
         items={[
           device?.replay ? "Simulated replay evidence" : "Current capture",
         ]}
@@ -519,30 +455,8 @@ export function Health() {
           </Tag>
         }
       />
-      <Kpis>
-        <Kpi
-          label="Startup"
-          value={`${done} / ${startup.length}`}
-          context="Steps completed"
-        />
-        <Kpi
-          label="SDKs ready"
-          value={readySdks}
-          context="Initialized in this capture"
-        />
-        <Kpi
-          label="Ads shown"
-          value={ads}
-          context="Interstitial and rewarded"
-        />
-        <Kpi
-          label="Ad revenue"
-          value={`$${h.revenue.total.toFixed(4)}`}
-          context="Reported by the game"
-        />
-      </Kpis>
       <Panel
-        title="Needs a look"
+        title="Issues to fix"
         actions={
           <Tag kind={issues.length ? "warn" : "plain"}>
             {issues.length} observed issues
@@ -574,7 +488,7 @@ export function Health() {
           <div className="pl-quiet">
             <span dangerouslySetInnerHTML={{ __html: dora }} />
             <p className="muted">
-              Nothing needs a look in the evidence received so far.
+              No issues observed in the evidence received so far.
             </p>
           </div>
         )}
@@ -590,6 +504,28 @@ export function Health() {
         )}
       </Panel>
 
+      <Kpis>
+        <Kpi
+          label="Startup"
+          value={`${done} / ${startup.length}`}
+          context="Steps completed"
+        />
+        <Kpi
+          label="SDKs ready"
+          value={readySdks}
+          context="Initialized in this capture"
+        />
+        <Kpi
+          label="Ads shown"
+          value={ads}
+          context="Interstitial and rewarded"
+        />
+        <Kpi
+          label="Ad revenue"
+          value={`$${h.revenue.total.toFixed(4)}`}
+          context="Reported by the game"
+        />
+      </Kpis>
       <section className="panel rise" style={{ padding: "18px 22px" }}>
         <div
           style={{
@@ -639,26 +575,7 @@ export function Health() {
           }}
         >
           {seenSdks.map((c) => (
-            <SdkCard
-              key={c.key}
-              card={c}
-              extra={
-                {
-                  "SDK.Firebase": h.firstEventVerified
-                    ? "Probe handed to SDK"
-                    : null,
-                  "SDK.AdsProvider":
-                    [
-                      mc?.country,
-                      h.adapterSummary &&
-                        `${h.adapterSummary.ok} of ${h.adapterSummary.total} adapters`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || null,
-                  "SDK.AdMob": "Used for App Open",
-                }[c.key] ?? null
-              }
-            />
+            <SdkCard key={c.key} card={c} />
           ))}
         </div>
       </section>
@@ -698,15 +615,18 @@ export function Health() {
                 header: <>Loaded</>,
                 className: "num mono",
                 cell: (f) => {
-                  return (
-                    <>
-                      {f.loaded}
-                      {f.loadFailed > 0 && (
-                        <span className="badc"> / {f.loadFailed} failed</span>
-                      )}
-                    </>
-                  );
+                  return <>{f.loaded}</>;
                 },
+              },
+              {
+                id: "load-failed",
+                header: <>Load failed</>,
+                className: "num mono",
+                cell: (f) => (
+                  <span className={f.loadFailed ? "badc" : "dim"}>
+                    {f.loadFailed}
+                  </span>
+                ),
               },
               {
                 id: "col3",
@@ -772,15 +692,7 @@ export function Health() {
         </div>
       </Panel>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 20,
-          alignItems: "flex-start",
-        }}
-        className="rise"
-      >
+      <div className="rise pl-health-checks">
         <CheckCard
           title="Ad rules"
           sub={`Checked against this game's AdConfig.${monitor.adRules?.levelSource ? ` Level from ${monitor.adRules.levelSource}.` : ""}`}

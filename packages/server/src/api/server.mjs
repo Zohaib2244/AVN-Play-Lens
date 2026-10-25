@@ -127,6 +127,14 @@ export function createServer(ctx) {
 
     if (area === 'devices' && id === 'saved') {
       if (req.method === 'GET' && !sub) return send(res, 200, ctx.store?.list() ?? []);
+      if (req.method === 'PATCH' && sub && !pkg) {
+        const saved = ctx.store?.list().find((d) => d.id === sub);
+        if (!saved) return send(res, 404, { error: 'Remembered device not found' });
+        const input = await readJson(req);
+        if (typeof input.autoReconnect !== 'boolean') return send(res, 400, { error: 'Choose whether auto-reconnect is on or off.' });
+        ctx.store.remember({ ...saved, autoReconnect: input.autoReconnect });
+        return send(res, 200, { ok: true, autoReconnect: input.autoReconnect });
+      }
       if (req.method === 'POST' && sub && ['disconnect', 'reconnect', 'forget'].includes(pkg)) {
         if (!ctx.connections) return send(res, 503, { error: 'adb not found' });
         if (!ctx.store.list().some((d) => d.id === sub)) return send(res, 404, { error: 'Remembered device not found' });
@@ -346,7 +354,7 @@ export function createServer(ctx) {
       perf: monitor?.perf.samples.length ? { samples: monitor.perf.samples, summary: monitor.perf.summary() } : null,
       snapshot: monitor?.snapshot() ?? null,
     });
-    const stopStream = async ({ save = true } = {}) => {
+    const stopStream = async ({ save = recorder?.saved === true } = {}) => {
       ending = true;
       pauseSnapshots();
       clearInterval(ticker);
@@ -393,7 +401,7 @@ export function createServer(ctx) {
       if (msg.type === 'stream.start') {
         const pkg = msg.pkg && PACKAGE_RE.test(msg.pkg) ? msg.pkg : null;
         if (!pkg || !games.list().some((g) => g.packageId === pkg)) return out({ type: 'stream.state', streamId: msg.streamId, state: 'error', reason: 'Select a registered game to start tracking.' });
-        await stopStream({ save: msg.previous !== 'discard' });
+        await stopStream({ save: msg.previous === 'save' || (msg.previous !== 'discard' && recorder?.saved === true) });
         let source;
         if (isReplay(msg.serial)) source = replaySource(ctx.replay.file);
         else if (ctx.adb && typeof msg.serial === 'string') source = adbSource(ctx.adb, msg.serial, { history: !!msg.history });
@@ -499,7 +507,7 @@ export function createServer(ctx) {
           if (monitor) liveMonitors.delete(monitor);
           if (recorder) {
             recorder.paused = true;
-            if (recorder.lines || recorder.saved) await recorder.save(monitor?.summary(), captureOptions());
+            if (recorder.saved) await recorder.save(monitor?.summary(), captureOptions());
           }
           out({ type: 'session', streamId: currentStreamId, ...recorder?.details(), paused: true });
         }
@@ -523,7 +531,7 @@ export function createServer(ctx) {
           if (recorder === saving) out({ type: 'session', streamId: currentStreamId, ...saving.details() });
         }
       } else if (msg.type === 'stream.stop') {
-        await stopStream({ save: msg.previous !== 'discard' });
+        await stopStream({ save: msg.previous === 'save' || (msg.previous !== 'discard' && recorder?.saved === true) });
       } else if (msg.type === 'firebase.refresh' && monitor) {
         refreshFirebase(msg.serial, monitor.pkg, monitor);
       } else if (msg.type === 'run.start' && monitor) {

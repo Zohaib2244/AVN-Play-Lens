@@ -1,12 +1,12 @@
-import type { CommandItem, NavItem } from "@avn/ui";
+import type { NavItem } from "@avn/ui";
 import {
   AppShell,
   Brand,
   Button,
-  CommandPalette,
   DialogShell,
   Icon,
   NotificationList,
+  Popover,
   SearchButton,
   Segmented,
   ShortcutsDialog,
@@ -20,30 +20,15 @@ import {
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { useViewPreference } from "../route-state";
 import { deviceName, useApp } from "../state";
+import { healthIssues } from "../health-issues";
 import { GameIcon } from "./GameIcon";
+import { CommandRunner } from "./CommandRunner";
 
-const LIBRARY: NavItem[] = [
-  { id: "home", label: "Game library", icon: "grid" },
-  { id: "sessions", label: "Saved sessions", icon: "book" },
-  { id: "devices", label: "Devices", icon: "link" },
-];
-const INSPECT: NavItem[] = [
-  { id: "game", label: "Overview", icon: "home" },
-  { id: "logs", label: "Logs", icon: "term" },
-  { id: "performance", label: "Performance", icon: "pulse" },
-  { id: "health", label: "Plugin health", icon: "shield" },
-];
-const DATA: NavItem[] = [
-  { id: "firebase", label: "Firebase events", icon: "flame" },
-  { id: "remote-config", label: "Remote Config", icon: "sliders" },
-  { id: "checklist", label: "Checklist", icon: "checklist" },
-  { id: "snapshooter", label: "Level Snapshooter", icon: "grid" },
-  { id: "game-sessions", label: "Game sessions", icon: "book" },
-];
+import { LIBRARY, MAIN, INSPECT, TOOLS } from "../nav-items";
 const EXTRA: NavItem[] = [
   { id: "connect", label: "Connect a device", icon: "link" },
 ];
-const ALL_PAGES = [...LIBRARY, ...INSPECT, ...DATA, ...EXTRA];
+const ALL_PAGES = [...LIBRARY, ...MAIN, ...INSPECT, ...TOOLS, ...EXTRA];
 
 function readPreference(key: string, fallback: string) {
   try {
@@ -66,7 +51,6 @@ export function PlayLensShell({ children }: PropsWithChildren) {
     stopped,
     stream,
     monitor,
-    viewGameSessions,
     refreshApps,
     reloadGames,
     archiveReturn,
@@ -92,6 +76,7 @@ export function PlayLensShell({ children }: PropsWithChildren) {
     updateDensity(next === "comfort" ? "comfort" : "compact");
   const [refreshing, setRefreshing] = useState(false);
   const content = useRef<HTMLDivElement>(null);
+  const bell = useRef<HTMLButtonElement>(null);
   const active = view.endsWith("-setup")
     ? view.replace("-setup", "")
     : view === "saved-session"
@@ -103,34 +88,23 @@ export function PlayLensShell({ children }: PropsWithChildren) {
   const groups = inGameWorkspace
     ? [
         {
-          label: "Inspect",
-          items: INSPECT.map((p) =>
+          label: "Main",
+          items: MAIN.map((p) =>
             p.id === "health"
-              ? {
-                  ...p,
-                  count: monitor?.flags?.filter((f) => f.severity !== "info")
-                    .length,
-                }
+              ? { ...p, count: healthIssues(monitor).length || undefined }
               : p,
           ),
         },
-        { label: "Test & capture", items: DATA },
-        { label: "Library", items: LIBRARY },
+        { label: "Inspect", items: INSPECT },
+        { label: "Tools", items: TOOLS },
+        { label: "Workspace", items: LIBRARY },
       ]
     : [
         { label: "Workspace", items: LIBRARY },
         { label: "Get started", items: EXTRA },
       ];
-  const tabs = inGameWorkspace
-    ? ["logs", "performance", "health", "checklist"].map(
-        (id) => ALL_PAGES.find((p) => p.id === id)!,
-      )
-    : LIBRARY;
-  const select = (id: string) => {
-    if (id === "sessions") viewGameSessions("__all");
-    else if (id === "game-sessions") viewGameSessions(game?.packageId);
-    else setView(id);
-  };
+  const tabs = inGameWorkspace ? [MAIN[0], INSPECT[0], MAIN[1]] : LIBRARY;
+  const select = (id: string) => setView(id);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.palette = palette;
@@ -164,7 +138,16 @@ export function PlayLensShell({ children }: PropsWithChildren) {
     setRefreshing(true);
     try {
       await reloadGames();
-      refreshApps();
+      await refreshApps();
+    } catch (err) {
+      toast({
+        kind: "bad",
+        title: "Could not refresh the library",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Try again when your device is connected.",
+      });
     } finally {
       setRefreshing(false);
     }
@@ -182,37 +165,6 @@ export function PlayLensShell({ children }: PropsWithChildren) {
       });
     }
   };
-  const commands: CommandItem[] = [
-    ...[
-      ...LIBRARY,
-      ...EXTRA,
-      ...(inGameWorkspace ? [...INSPECT, ...DATA] : []),
-    ].map((p) => ({ ...p, group: "Pages", run: () => select(p.id) })),
-    ...games.map(
-      (g): CommandItem => ({
-        id: g.id,
-        label: g.name,
-        icon: "pad",
-        hint: g.packageId,
-        group: "Games",
-        run: () => openGame(g.packageId),
-      }),
-    ),
-    {
-      id: "appearance",
-      label: "Appearance and density",
-      icon: "sliders" as const,
-      group: "Actions",
-      run: () => setSettings(true),
-    },
-    {
-      id: "shortcuts",
-      label: "Keyboard shortcuts",
-      icon: "book",
-      group: "Actions",
-      run: () => setShortcuts(true),
-    },
-  ];
   return (
     <AppShell
       className="playlens-app"
@@ -319,13 +271,14 @@ export function PlayLensShell({ children }: PropsWithChildren) {
             <>
               <SearchButton onClick={() => setCommand(true)} />
               <button
-                className="icon-btn"
+                className="btn pl-refresh"
                 title="Refresh game library and installed versions"
                 aria-label="Refresh game library and installed versions"
-                disabled={refreshing}
+                disabled={refreshing || !online}
                 onClick={refresh}
               >
                 <Icon name="refresh" />
+                <span className="pl-refresh-label">Refresh library</span>
               </button>
               <button
                 className="icon-btn pl-copy"
@@ -337,11 +290,14 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               </button>
               <button
                 className="icon-btn"
+                ref={bell}
                 title="Notifications"
+                aria-expanded={notifications}
+                aria-controls="playlens-notifications"
                 aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
                 onClick={() => {
                   markAllRead();
-                  setNotifications(true);
+                  setNotifications((open) => !open);
                 }}
               >
                 <Icon name="bell" />
@@ -384,11 +340,17 @@ export function PlayLensShell({ children }: PropsWithChildren) {
                   : "Connect an Android phone to test a build"}
               </span>
               <span className="pl-context-end">
-                {device?.replay
-                  ? "Simulated evidence · no live phone"
-                  : live
-                    ? "Collecting this game only"
-                    : "Tracking paused"}
+                {stopped
+                  ? "Capture stopped"
+                  : device?.replay
+                    ? "Simulated evidence · no live phone"
+                    : live
+                      ? "Collecting this game only"
+                      : !device
+                        ? "Connect a phone to begin"
+                        : stopped
+                          ? "Capture stopped"
+                          : "Waiting for game logs"}
               </span>
             </div>
           )}
@@ -479,7 +441,7 @@ export function PlayLensShell({ children }: PropsWithChildren) {
       <DialogShell
         open={settings}
         onOpenChange={setSettings}
-        title="Make yourself at home"
+        title="Appearance and spacing"
       >
         <div className="pl-settings">
           <label>Theme</label>
@@ -492,6 +454,9 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               { value: "light", label: "Light" },
             ]}
           />
+          <p className="pl-page-note">
+            Light uses bright surfaces; Dark uses dim surfaces for lower light.
+          </p>
           <label htmlFor="palette">Palette</label>
           <select
             id="palette"
@@ -507,6 +472,10 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               </option>
             ))}
           </select>
+          <p className="pl-page-note">
+            Palette changes the color scheme: Nutmeg is warm orange, Slate cool
+            gray, Moss green, Hibiscus pink, and White build neutral.
+          </p>
           <label>Data density</label>
           <Segmented
             label="Data density"
@@ -517,6 +486,10 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               { value: "comfort", label: "Roomy" },
             ]}
           />
+          <p className="pl-page-note">
+            Compact fits more rows on screen. Roomy adds space around rows and
+            controls.
+          </p>
           <Button
             variant="ghost"
             onClick={() => {
@@ -529,14 +502,17 @@ export function PlayLensShell({ children }: PropsWithChildren) {
           <Button onClick={() => setSettings(false)}>Done</Button>
         </div>
       </DialogShell>
-      <DialogShell
+      <Popover
         open={notifications}
-        onOpenChange={setNotifications}
-        title="Notifications"
+        onClose={() => setNotifications(false)}
+        anchor={bell}
+        width={380}
+        className="pl-notifications"
       >
-        <NotificationList />
-        <Button onClick={() => setNotifications(false)}>Close</Button>
-      </DialogShell>
+        {notifications && (
+          <NotificationContents onClose={() => setNotifications(false)} />
+        )}
+      </Popover>
       <ShortcutsDialog
         open={shortcuts}
         onClose={() => setShortcuts(false)}
@@ -548,56 +524,48 @@ export function PlayLensShell({ children }: PropsWithChildren) {
         ]}
       />
       {command && (
-        <CommandDialog items={commands} onClose={() => setCommand(false)} />
+        <CommandRunner
+          onClose={() => setCommand(false)}
+          onAppearance={() => setSettings(true)}
+          onShortcuts={() => setShortcuts(true)}
+        />
       )}
     </AppShell>
   );
 }
 
-function CommandDialog({
-  items,
-  onClose,
-}: {
-  items: CommandItem[];
-  onClose: () => void;
-}) {
-  const host = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
+function NotificationContents({ onClose }: { onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const trigger = document.activeElement;
-    host.current?.querySelector("input")?.focus();
-    const trap = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close.current();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const nodes = [
-        ...host.current!.querySelectorAll<HTMLElement>(
-          "input,button:not(:disabled)",
-        ),
-      ];
-      const first = nodes[0],
-        last = nodes.at(-1);
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    };
-    const node = host.current;
-    node?.addEventListener("keydown", trap);
+    panel.current?.focus({ preventScroll: true });
     return () => {
-      node?.removeEventListener("keydown", trap);
-      (trigger as HTMLElement | null)?.focus();
+      if (trigger instanceof HTMLElement)
+        trigger.focus({ preventScroll: true });
     };
   }, []);
   return (
-    <div ref={host}>
-      <CommandPalette open onClose={onClose} items={items} />
+    <div
+      ref={panel}
+      tabIndex={-1}
+      id="playlens-notifications"
+      aria-label="Notifications"
+      onBlur={(e) => {
+        if (
+          e.relatedTarget &&
+          !e.currentTarget.contains(e.relatedTarget as Node) &&
+          (e.relatedTarget as HTMLElement).getAttribute("aria-controls") !==
+            "playlens-notifications"
+        )
+          onClose();
+      }}
+    >
+      <NotificationList />
+      <div className="pl-notifications-foot">
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          Close notifications
+        </Button>
+      </div>
     </div>
   );
 }
@@ -605,8 +573,10 @@ function CommandDialog({
 export function ToastBridge() {
   const { toast: incoming, setToast } = useApp();
   const { toast } = useToast();
+  const delivered = useRef<typeof incoming>(null);
   useEffect(() => {
-    if (!incoming) return;
+    if (!incoming || delivered.current === incoming) return;
+    delivered.current = incoming;
     toast({
       kind: incoming.severity === "critical" ? "bad" : incoming.kind || "info",
       title: incoming.title,

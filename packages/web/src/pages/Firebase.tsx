@@ -1,5 +1,5 @@
 import { Button, Panel, Pipeline, StatusStrip, Tag } from "@avn/ui";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { api, errorMessage } from "../api";
 import { PageHead } from "../components/bits";
 import { DataTable } from "../components/DataTable";
@@ -7,7 +7,7 @@ import {
   EVENT_CHECK as CHECK,
   FirebaseEvents,
 } from "../components/FirebaseEvents";
-import { Disclosure, Menu, Skeleton } from "../components/ui";
+import { Menu, Skeleton } from "../components/ui";
 import { useResource } from "../query";
 import { clock, deviceName, useApp } from "../state";
 import { useAppAction } from "./Logs";
@@ -37,7 +37,8 @@ export function FirebaseSetup() {
     setView,
     showToast,
     stream,
-    captureVersion,
+    stopped,
+    online,
   } = useApp();
   const appAction = useAppAction();
   const [step, setStep] = useState(1);
@@ -48,28 +49,24 @@ export function FirebaseSetup() {
     { enabled: !!serial && !!pkg },
   );
   const commands = commandsQuery.data?.commands ?? [];
-  const baseCount = useRef<number | null>(null);
-  useEffect(() => {
-    baseCount.current = null;
-  }, [captureVersion]);
   const fb = monitor?.firebase;
-  const debugOn = !!fb?.debug?.on;
+  const [enabled, setEnabled] = useState(false);
+  const [error, setError] = useState("");
+  const debugOn = enabled || !!fb?.debug?.on;
   const replay = !!device?.replay;
-
-  useEffect(() => {
-    if (step === 3 && baseCount.current == null)
-      baseCount.current = fb?.counts.firebase ?? 0;
-  }, [step, fb]);
 
   const turnOn = async () => {
     setBusy(true);
+    setError("");
     try {
       await api(`devices/${encodeURIComponent(serial ?? "")}/firebase`, {
         method: "POST",
         body: { pkg, on: true },
       });
       send({ type: "firebase.refresh", serial });
+      setEnabled(true);
     } catch (e) {
+      setError(errorMessage(e));
       showToast({
         title: "Could not turn on debug mode",
         msg: errorMessage(e),
@@ -81,14 +78,20 @@ export function FirebaseSetup() {
   const restart = async () => {
     setBusy(true);
     const success = await appAction("restart");
-    if (success) setRestarted(true);
+    if (success) {
+      setRestarted(true);
+      setStep(3);
+    } else
+      setError(
+        "Could not restart the game. Check the phone connection and try again.",
+      );
     setBusy(false);
   };
 
-  const caught = Math.max(
-    0,
-    (fb?.counts.firebase ?? 0) - (baseCount.current ?? 0),
-  );
+  const caught =
+    step === 3 && (restarted || replay) ? (fb?.counts.firebase ?? 0) : 0;
+  const listening = online && !stopped && stream.state === "live";
+  const complete = step === 3 && debugOn && caught > 0;
   const recent = (fb?.rows ?? [])
     .filter((r) => r.sdk === "FA" && !r.missing)
     .slice(0, 3);
@@ -103,7 +106,34 @@ export function FirebaseSetup() {
       >
         <Button onClick={() => setView("firebase")}>Back to events</Button>
       </PageHead>
-      <Stepper step={step} labels={["Debug mode", "Restart game", "Listen"]} />
+      <StatusStrip
+        live={false}
+        status={
+          complete
+            ? "Setup complete — device events received"
+            : step === 3
+              ? listening
+                ? "Listening for Firebase events"
+                : "Waiting for active capture"
+              : `Step ${step} of 3 · ${step === 1 ? (debugOn ? "Debug mode connected" : "Waiting for debug mode") : "Waiting for game restart"}`
+        }
+        items={[
+          replay ? "Demo simulator · saved log evidence" : deviceName(device),
+        ]}
+        tag={
+          <Tag kind={complete ? "ok" : "info"}>
+            {complete
+              ? "Done"
+              : step === 3 && listening
+                ? "Listening"
+                : "Waiting"}
+          </Tag>
+        }
+      />
+      <Stepper
+        step={complete ? 4 : step}
+        labels={["Debug mode", "Restart game", "Listen"]}
+      />
       <Panel
         title={
           ["Turn on debug mode", "Restart the game", "Listen for events"][
@@ -112,6 +142,11 @@ export function FirebaseSetup() {
         }
       >
         <div className="pb pl-setup-panel">
+          {error && (
+            <p className="badc" role="alert">
+              {error}
+            </p>
+          )}
           {step === 1 && (
             <>
               <p className="muted">
@@ -131,7 +166,7 @@ export function FirebaseSetup() {
                   variant="primary"
                   loading={busy}
                   loadingLabel="Enabling…"
-                  disabled={!pkg}
+                  disabled={!pkg || !device || !online || stopped}
                   onClick={turnOn}
                 >
                   Enable debug mode
@@ -167,6 +202,7 @@ export function FirebaseSetup() {
                   variant="primary"
                   loading={busy}
                   loadingLabel="Restarting…"
+                  disabled={!online || stopped || !device}
                   onClick={restart}
                 >
                   Restart game
@@ -177,14 +213,21 @@ export function FirebaseSetup() {
           {step === 3 && (
             <>
               <div className="status-strip">
-                <Tag kind={caught ? "ok" : "info"}>
-                  {caught ? "Events received" : "Listening"}
+                <Tag kind={complete ? "ok" : "info"}>
+                  {complete
+                    ? "Setup complete"
+                    : listening
+                      ? "Listening"
+                      : "Waiting for capture"}
                 </Tag>
                 <span>{caught} Firebase events in this step</span>
               </div>
               <p className="muted">
-                Play a level. Events appear when Firebase records them on this
-                device.
+                {complete
+                  ? "Event logging works for this game. Open Firebase events to inspect the captured events and parameters."
+                  : listening
+                    ? "Keep the game open and play a level. Setup completes when a Firebase event is captured on this device."
+                    : "Resume capture from the command menu, or reconnect your phone, then keep the game open."}
               </p>
               <div className="t-wrap">
                 <DataTable
@@ -223,7 +266,9 @@ export function FirebaseSetup() {
                 </p>
               )}
               <Button variant="primary" onClick={() => setView("firebase")}>
-                Open Firebase events
+                {complete
+                  ? "Done — open Firebase events"
+                  : "Open events while waiting"}
               </Button>
             </>
           )}
@@ -232,8 +277,12 @@ export function FirebaseSetup() {
       <div className="row-wrap">
         {step > 1 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
         {step < 3 && (
-          <Button disabled={!canNext} onClick={() => setStep(step + 1)}>
-            Continue <span aria-hidden="true">→</span>
+          <Button
+            disabled={!canNext || busy}
+            onClick={() => setStep((current) => Math.min(3, current + 1))}
+          >
+            {step === 1 ? "Next: restart game" : "Next: listen for events"}{" "}
+            <span aria-hidden="true">→</span>
           </Button>
         )}
       </div>
@@ -252,6 +301,8 @@ export function Firebase() {
     showInLogs,
     showToast,
     gameInventory,
+    stopped,
+    stream,
   } = useApp();
   const fb = monitor?.firebase;
   const installed =
@@ -341,24 +392,41 @@ export function Firebase() {
       <StatusStrip
         live={false}
         status={
-          fb.receiving
-            ? "Receiving events"
-            : fb.debug?.on
-              ? "Listening"
-              : "Debug mode off"
+          stopped
+            ? "Capture stopped"
+            : stream.state === "ended"
+              ? device.replay
+                ? "Demo playback finished"
+                : "Capture finished"
+              : fb.receiving
+                ? "Receiving events"
+                : fb.debug?.on
+                  ? "Listening"
+                  : "Debug mode off"
         }
         items={[
           `${fb.counts.firebase} Firebase logs`,
-          `${fb.counts.sent || 0} handed to SDK`,
           device?.replay ? "Simulated replay" : "Current capture",
         ]}
         tag={
-          <Tag kind={fb.receiving ? "ok" : fb.debug?.on ? "info" : "warn"}>
-            {fb.receiving
-              ? "Device evidence received"
-              : fb.debug?.on
-                ? "Waiting for evidence"
-                : "Setup needed"}
+          <Tag
+            kind={
+              stopped || stream.state === "ended"
+                ? "plain"
+                : fb.receiving
+                  ? "ok"
+                  : fb.debug?.on
+                    ? "info"
+                    : "warn"
+            }
+          >
+            {stopped || stream.state === "ended"
+              ? "Captured evidence"
+              : fb.receiving
+                ? "Device evidence received"
+                : fb.debug?.on
+                  ? "Waiting for evidence"
+                  : "Setup needed"}
           </Tag>
         }
       />
@@ -371,55 +439,7 @@ export function Firebase() {
           </button>
         </div>
       )}
-      {fb.counts.notLogged > 0 && (
-        <div className="banner">
-          {fb.counts.notLogged} SDK handoffs have no matching Firebase payload.
-          This does not confirm an upload failure.
-        </div>
-      )}
       <FirebaseEvents firebase={fb} showInLogs={showInLogs} />
-      <Disclosure
-        id="firebase.diagnostics"
-        title="SDK and upload diagnostics"
-        hint={
-          fb.diagnostics?.upload?.state === "successful"
-            ? "Upload reported successful"
-            : fb.diagnostics?.lines
-              ? `${fb.diagnostics.lines} SDK log lines observed`
-              : "No upload confirmation received"
-        }
-      >
-        {fb.diagnostics?.upload && (
-          <div className="row-wrap">
-            <Tag
-              kind={fb.diagnostics.upload.state === "successful" ? "ok" : "bad"}
-            >
-              {fb.diagnostics.upload.state === "successful"
-                ? "Upload reported successful"
-                : "Upload reported failed"}
-            </Tag>
-            <span className="mono dim">
-              {clock(fb.diagnostics.upload.ts, false)}
-            </span>
-            {fb.diagnostics.upload.entryId && (
-              <Button
-                size="sm"
-                onClick={() => showInLogs(fb.diagnostics!.upload!.entryId!)}
-              >
-                Show upload log
-              </Button>
-            )}
-          </div>
-        )}
-        <p className="muted">
-          Device logs and SDK handoffs do not prove server delivery. Keep
-          tracking active while you play; earlier events are not backfilled.
-        </p>
-        {fb.diagnostics?.issue && (
-          <p className="warnc mono">{fb.diagnostics.issue}</p>
-        )}
-        <Button onClick={() => setView("logs")}>Inspect game logs</Button>
-      </Disclosure>
     </main>
   );
 }

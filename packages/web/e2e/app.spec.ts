@@ -1,7 +1,19 @@
 import { test, expect, type Page } from "@playwright/test";
 const sidebarPage = (page: Page, name: string) =>
-  page.locator(".side").getByRole("button", { name: new RegExp(`^${name}`) });
+  page
+    .locator(".side")
+    .getByRole("button", {
+      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    });
 async function navigate(page: Page, name: string) {
+  name =
+    (
+      {
+        "Firebase events": "Events (Firebase)",
+        "Remote Config": "Remote Config (RC)",
+        Checklist: "Checklist Verifier",
+      } as Record<string, string>
+    )[name] ?? name;
   if (await sidebarPage(page, name).isVisible()) {
     await sidebarPage(page, name).click();
     return;
@@ -51,10 +63,21 @@ test("library and every workspace page preserve the AVN layouts", async ({
     page.getByRole("heading", { name: "Device connection", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".pl-library .kpis")).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath("Game-library.png"),
+    animations: "disabled",
+  });
   await noOverflow(page);
   await page
     .getByRole("button", { name: "Open PlayLens Demo", exact: true })
     .click();
+  await expect(
+    page.getByRole("heading", { name: "PlayLens Demo", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("Overview.png"),
+    animations: "disabled",
+  });
   for (const name of [
     "Logs",
     "Performance",
@@ -232,7 +255,9 @@ test("saved capture queries, sorting, simple deletion confirmation and inspector
   ).toBeEnabled();
   await expect(page.locator(".playlens-app")).toHaveJSProperty("scrollLeft", 0);
   expect((await dialog.boundingBox())!.x).toBeGreaterThanOrEqual(0);
-  await page.screenshot({ path: info.outputPath("delete-session-confirmation.png") });
+  await page.screenshot({
+    path: info.outputPath("delete-session-confirmation.png"),
+  });
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   expect(deletions).toEqual([]);
   await page.getByRole("button", { name: "Review", exact: true }).click();
@@ -255,9 +280,13 @@ test("saved capture queries, sorting, simple deletion confirmation and inspector
     page.getByRole("heading", { name: "Saved sessions", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Delete…", exact: true }).click();
-  await dialog.getByRole("button", { name: "Delete session", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Delete session", exact: true })
+    .click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Review", exact: true }),
+  ).toHaveCount(0);
   expect(deletions).toEqual(["/api/sessions/fixture-capture"]);
 });
 
@@ -275,7 +304,7 @@ test("device pairing, forms and keyboard command navigation work", async ({
   ).toBeVisible();
   await page.keyboard.press("Control+k");
   await page
-    .getByRole("textbox", {
+    .getByRole("combobox", {
       name: "Search pages, games and actions",
       exact: true,
     })
@@ -298,29 +327,55 @@ test("device drawer slides without shifting the page and restores focus", async 
   page,
 }, info) => {
   await page.goto("/?view=devices");
-  const trigger = page.getByRole("button", { name: "Device details", exact: true });
+  const trigger = page.getByRole("button", {
+    name: "Device details",
+    exact: true,
+  });
   await expect(trigger).toBeVisible();
   // Let the separate page entrance finish before measuring the drawer entrance.
-  await expect.poll(() => page.locator(".pl-page").evaluate((el) =>
-    el.getAnimations({ subtree: true }).filter((a) => a.playState === "running").length,
-  )).toBe(0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".pl-page")
+        .evaluate(
+          (el) =>
+            el
+              .getAnimations({ subtree: true })
+              .filter((a) => a.playState === "running").length,
+        ),
+    )
+    .toBe(0);
   const baseline = await page.locator(".pl-page").boundingBox();
   for (let cycle = 0; cycle < 2; cycle++) {
     const [frames] = await Promise.all([
-      page.evaluate(() => new Promise<{ x: number; y: number; scroll: number[] }[]>((resolve) => {
-        const samples: { x: number; y: number; scroll: number[] }[] = [];
-        const start = performance.now();
-        const sample = () => {
-          const rect = document.querySelector(".pl-page")!.getBoundingClientRect();
-          samples.push({ x: rect.x, y: rect.y, scroll: [".playlens-app", ".workspace", ".pl-scroll"].flatMap((selector) => {
-            const el = document.querySelector(selector)!;
-            return [el.scrollLeft, el.scrollTop];
-          }) });
-          if (performance.now() - start < 900) requestAnimationFrame(sample);
-          else resolve(samples);
-        };
-        requestAnimationFrame(sample);
-      })),
+      page.evaluate(
+        () =>
+          new Promise<{ x: number; y: number; scroll: number[] }[]>(
+            (resolve) => {
+              const samples: { x: number; y: number; scroll: number[] }[] = [];
+              const start = performance.now();
+              const sample = () => {
+                const rect = document
+                  .querySelector(".pl-page")!
+                  .getBoundingClientRect();
+                samples.push({
+                  x: rect.x,
+                  y: rect.y,
+                  scroll: [".playlens-app", ".workspace", ".pl-scroll"].flatMap(
+                    (selector) => {
+                      const el = document.querySelector(selector)!;
+                      return [el.scrollLeft, el.scrollTop];
+                    },
+                  ),
+                });
+                if (performance.now() - start < 900)
+                  requestAnimationFrame(sample);
+                else resolve(samples);
+              };
+              requestAnimationFrame(sample);
+            },
+          ),
+      ),
       trigger.click(),
     ]);
     expect(frames.length).toBeGreaterThan(2);
@@ -329,12 +384,20 @@ test("device drawer slides without shifting the page and restores focus", async 
       expect(Math.abs(frame.y - baseline!.y)).toBeLessThan(1);
       expect(frame.scroll).toEqual([0, 0, 0, 0, 0, 0]);
     }
-    const drawer = page.getByRole("dialog", { name: "Replay device", exact: true });
+    const drawer = page.getByRole("dialog", {
+      name: "Replay device",
+      exact: true,
+    });
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole("button", { name: "Close", exact: true })).toBeFocused();
-    expect(await drawer.evaluate((el) => el.parentElement?.matches(".playlens-app"))).toBe(true);
+    await expect(
+      drawer.getByRole("button", { name: "Close", exact: true }),
+    ).toBeFocused();
+    expect(
+      await drawer.evaluate((el) => el.parentElement?.matches(".playlens-app")),
+    ).toBe(true);
     await noOverflow(page);
-    if (cycle === 0) await page.screenshot({ path: info.outputPath("device-drawer.png") });
+    if (cycle === 0)
+      await page.screenshot({ path: info.outputPath("device-drawer.png") });
     await page.keyboard.press("Escape");
     await expect(drawer).toHaveCount(0);
     await expect(trigger).toBeFocused();
@@ -345,10 +408,17 @@ test("device drawer slides without shifting the page and restores focus", async 
     document.documentElement.dataset.palette = "moss";
   });
   await trigger.click();
-  const drawer = page.getByRole("dialog", { name: "Replay device", exact: true });
+  const drawer = page.getByRole("dialog", {
+    name: "Replay device",
+    exact: true,
+  });
   await expect(drawer).toBeVisible();
-  await expect.poll(() => drawer.evaluate((el) => getComputedStyle(el).transform)).toBe("none");
-  await page.screenshot({ path: info.outputPath("device-drawer-light-reduced-motion.png") });
+  await expect
+    .poll(() => drawer.evaluate((el) => getComputedStyle(el).transform))
+    .toBe("none");
+  await page.screenshot({
+    path: info.outputPath("device-drawer-light-reduced-motion.png"),
+  });
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
 });

@@ -5,7 +5,6 @@ import {
   PageHead,
   Panel,
   Tag,
-  Tiles,
   useToast,
 } from "@avn/ui";
 import { useState } from "react";
@@ -15,36 +14,7 @@ import { GameIcon } from "../components/GameIcon";
 import { SessionHistory } from "../components/SessionHistory";
 import { Menu } from "../components/ui";
 import { deviceName, useApp } from "../state";
-
-const VIEWS: [string, string, import("@avn/ui").IconName, string][] = [
-  ["logs", "Logs", "term", "Search output and crash traces."],
-  [
-    "performance",
-    "Performance",
-    "pulse",
-    "Frames, CPU, memory and temperature.",
-  ],
-  ["health", "Plugin health", "shield", "SDK startup, ads and privacy checks."],
-  ["firebase", "Firebase events", "flame", "Events recorded by this device."],
-  [
-    "remote-config",
-    "Remote Config",
-    "sliders",
-    "Fetched settings and level sequences.",
-  ],
-  [
-    "checklist",
-    "Checklist",
-    "checklist",
-    "Publishing checks backed by evidence.",
-  ],
-  [
-    "snapshooter",
-    "Level Snapshooter",
-    "grid",
-    "Level captures and ZIP exports.",
-  ],
-];
+import { healthIssues } from "../health-issues";
 
 export function Game() {
   const app = useApp();
@@ -53,8 +23,6 @@ export function Game() {
     gameInventory,
     serial,
     device,
-    devices,
-    selectDevice,
     pkg,
     setView,
     performGameAction,
@@ -63,7 +31,8 @@ export function Game() {
     stopped,
     setStopped,
     reloadGames,
-    viewGameSessions,
+    monitor,
+    stream,
   } = app;
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
@@ -82,7 +51,8 @@ export function Game() {
       : null;
   const disabled =
     !device || !info?.installed || !!actionBusy || device?.replay;
-  const ready = devices.filter((d) => d.state === "device");
+  const issues = healthIssues(monitor);
+  const live = !stopped && stream.state === "live";
   const remove = async () => {
     try {
       await api(`games/${game.id}`, { method: "DELETE" });
@@ -140,32 +110,16 @@ export function Game() {
         />
       </div>
       <div className="pl-control-row">
-        <label className="pl-device-select">
-          <span className="eyebrow">Testing on</span>
-          <select
-            className="select"
-            aria-label="Game device"
-            value={serial || ""}
-            onChange={(e) =>
-              selectDevice(devices.find((d) => d.serial === e.target.value))
-            }
-          >
-            <option value="" disabled>
-              No device
-            </option>
-            {ready.map((d) => (
-              <option key={d.serial} value={d.serial}>
-                {deviceName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
         <Tag kind={info?.installed ? "plain" : "warn"}>
-          {info?.installed
-            ? `v${info.versionName || "?"} · build ${info.versionCode ?? "?"}`
-            : device
-              ? "Not installed"
-              : "No device"}
+          {!device
+            ? "No device"
+            : device.replay
+              ? "Demo simulator"
+              : !info
+                ? "Checking installed build…"
+                : info.installed
+                  ? `v${info.versionName || "?"} · build ${info.versionCode ?? "?"}`
+                  : "Install this game on the active phone"}
         </Tag>
         <span className="pl-spacer" />
         <Button
@@ -196,52 +150,113 @@ export function Game() {
             ]}
           />
         </span>
-        {stopped && (
-          <Button
-            disabled={!device || !info?.installed}
-            onClick={() => setStopped(false)}
-          >
-            Resume tracking
-          </Button>
-        )}
       </div>
-      <div className="strip-h">
-        <span className="eyebrow">Inspect this build</span>
-      </div>
-      <Tiles>
-        {VIEWS.map(([view, title, icon, text]) => (
-          <button className="tile" key={view} onClick={() => setView(view)}>
-            <span className="th">
-              <Icon name={icon} />
-              {title}
-            </span>
-            <span className="ts2">{text}</span>
-            <span className="go">
-              Open {title.toLowerCase()} <Icon name="arrow" />
-            </span>
-          </button>
-        ))}
-      </Tiles>
-      <Panel
-        title="Recent sessions"
-        subtitle="Saved captures for this game"
-        actions={
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => viewGameSessions(game.packageId)}
-          >
-            View all <Icon name="arrow" />
-          </Button>
-        }
+      <section
+        className="pl-overview-status"
+        aria-label="Game and capture status"
       >
-        <div className="data-page pl-history">
-          <SessionHistory
-            limit={3}
-            compact
-            groupByGame={false}
-            packageFilter={pkg ?? undefined}
-          />
+        <div>
+          <span className="eyebrow">Active device</span>
+          <strong>
+            {device?.replay ? "Demo simulator" : deviceName(device)}
+          </strong>
+          <span className="muted">
+            {device?.replay
+              ? "Saved logs · no live phone"
+              : device
+                ? `${device.transport === "wifi" ? "Wi-Fi" : "USB"} connection`
+                : "Connect a phone to begin"}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setView("devices")}>
+            Manage devices
+          </Button>
+        </div>
+        <div>
+          <span className="eyebrow">Capture</span>
+          <strong>
+            {!device
+              ? "Waiting for a device"
+              : !info
+                ? "Checking installed build"
+                : !info.installed
+                  ? "Game not installed"
+                  : stopped
+                    ? "Stopped"
+                    : live
+                      ? device.replay
+                        ? "Playing demo logs"
+                        : "Live capture"
+                      : stream.state === "starting"
+                        ? "Starting capture"
+                        : stream.state === "ended"
+                          ? device.replay
+                            ? "Demo playback finished"
+                            : "Capture finished"
+                          : stream.state === "error"
+                            ? "Capture needs attention"
+                            : "Waiting for game logs"}
+          </strong>
+          <span className="muted">
+            {stream.reason ||
+              "Only this game's logs and events. Auto-save is off."}
+          </span>
+          {info?.installed && (
+            <Button size="sm" onClick={() => setStopped(!stopped)}>
+              {stopped ? "Start capture" : "Stop capture"}
+            </Button>
+          )}
+        </div>
+        <div>
+          <span className="eyebrow">Problems</span>
+          <strong className={issues.length ? "warnc" : ""}>
+            {!device || !info?.installed || !monitor
+              ? "Waiting for evidence"
+              : issues.length
+                ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} to fix`
+                : "No issues observed"}
+          </strong>
+          <span className="muted">
+            {device?.replay
+              ? "Simulated evidence from the demo."
+              : "Based on this capture's plugin evidence."}
+          </span>
+          {!!monitor && (
+            <Button size="sm" variant="ghost" onClick={() => setView("health")}>
+              Review plugin health
+            </Button>
+          )}
+        </div>
+      </section>
+      <Panel title={issues.length ? "Fix these first" : "What's happening"}>
+        <div className="pb pl-setup-panel">
+          {issues.slice(0, 3).map((issue) => (
+            <div className="pl-overview-issue" key={issue.id}>
+              <Tag kind={issue.severity === "critical" ? "bad" : "warn"}>
+                {issue.severity === "critical" ? "Failed" : "Warning"}
+              </Tag>
+              <div>
+                <b>{issue.name}</b>
+                <p className="muted">{issue.detail}</p>
+              </div>
+            </div>
+          ))}
+          {!issues.length && (
+            <p className="muted">
+              {!device
+                ? "Connect an Android phone, then launch an installed build."
+                : !info?.installed
+                  ? "Install this game's package on the active phone to inspect it."
+                  : !monitor
+                    ? "Waiting for the first game logs. Launch the game on your phone."
+                    : "Capture is ready. Play the game to collect logs, events and plugin checks. Use the sidebar to inspect the evidence."}
+            </p>
+          )}
+          {!!issues.length && (
+            <Button onClick={() => setView("health")}>
+              Review{" "}
+              {issues.length === 1 ? "issue" : `all ${issues.length} issues`}
+            </Button>
+          )}
         </div>
       </Panel>
       <footer className="pl-game-footer">

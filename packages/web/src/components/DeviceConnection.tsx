@@ -3,7 +3,8 @@ import { deviceName, useApp } from "../state";
 
 export function DeviceConnection() {
   const { devices, device, online, serial, selectDevice, setView } = useApp();
-  const ready = devices.filter((d) => d.state === "device");
+  const hasPhone = devices.some((d) => !d.replay);
+  const ready = devices.filter((d) => d.state === "device" && (!d.replay || !hasPhone));
   return (
     <Panel
       title="Device connection"
@@ -36,7 +37,7 @@ export function DeviceConnection() {
             <span className="muted">Selected device</span>
             <select
               className="select"
-              aria-label="Selected device"
+              aria-label="Active device"
               value={serial || ""}
               onChange={(e) =>
                 selectDevice(ready.find((d) => d.serial === e.target.value))
@@ -44,7 +45,7 @@ export function DeviceConnection() {
             >
               {ready.map((d) => (
                 <option key={d.serial} value={d.serial}>
-                  {deviceName(d)}
+                  {d.replay ? "Demo simulator" : deviceName(d)}
                   {d.replay
                     ? " · simulated"
                     : d.transport === "wifi"

@@ -16,6 +16,62 @@ import {
 } from "@tanstack/react-router";
 import { DataTable } from "../src/components/DataTable";
 import { validateSearch } from "../src/navigation";
+import { useState } from "react";
+
+it("keeps expanded values and focused inputs mounted across live table updates", async () => {
+  vi.stubGlobal("scrollTo", vi.fn());
+  function LiveTable() {
+    const [tick, setTick] = useState(0);
+    return (
+      <>
+        <button onClick={() => setTick((value) => value + 1)}>
+          Live update
+        </button>
+        <DataTable
+          data={[{ id: "config", tick }]}
+          rowKey={(row) => row.id}
+          columns={[
+            {
+              id: "value",
+              header: "Value",
+              cell: (row) => (
+                <>
+                  <details>
+                    <summary>Config fields</summary>
+                    <p>{row.tick}</p>
+                  </details>
+                  <input aria-label="Editable value" defaultValue="Keep me" />
+                </>
+              ),
+            },
+          ]}
+        />
+      </>
+    );
+  }
+  const root = createRootRoute({ validateSearch, component: LiveTable });
+  const index = createRoute({ getParentRoute: () => root, path: "/" });
+  const router = createRouter({
+    routeTree: root.addChildren([index]),
+    history: createMemoryHistory({ initialEntries: ["/?view=remote-config"] }),
+  });
+  render(<RouterProvider router={router} />);
+  const summary = await screen.findByText("Config fields");
+  const details = summary.parentElement as HTMLDetailsElement;
+  details.open = true;
+  const input = screen.getByRole("textbox", {
+    name: "Editable value",
+  }) as HTMLInputElement;
+  input.focus();
+  input.value = "Edited";
+  fireEvent.click(screen.getByText("Live update"));
+  expect(details.isConnected).toBe(true);
+  expect(details.open).toBe(true);
+  expect(input.isConnected).toBe(true);
+  expect(document.activeElement).toBe(input);
+  expect(input.value).toBe("Edited");
+  cleanup();
+});
 it("sorts typed data and restores sorting from a copied URL", async () => {
   vi.stubGlobal("scrollTo", vi.fn());
   const root = createRootRoute({

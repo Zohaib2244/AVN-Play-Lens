@@ -5,7 +5,6 @@ export const VIEWS = [
   "devices",
   "sessions",
   "saved-session",
-  "game",
   "game-sessions",
   "logs",
   "performance",

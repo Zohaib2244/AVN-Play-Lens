@@ -23,6 +23,7 @@ import {
 } from "../components/ui";
 import { deviceName, useApp } from "../state";
 import { useAppAction } from "./Logs";
+import { useTrackingGate } from "../components/TrackingGate";
 
 const THERMAL = [
   "None",
@@ -166,6 +167,8 @@ export function Performance() {
     gameInventory.serial === serial
       ? gameInventory.games.find((g) => g.packageId === pkg)?.installed
       : undefined;
+  const gate = useTrackingGate("Performance", perf.current.length > 0);
+  if (gate) return gate;
   if (!device || !pkg || installed === false) {
     return (
       <main className="content">

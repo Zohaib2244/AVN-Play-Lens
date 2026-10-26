@@ -4,7 +4,7 @@ import { Checklist, ChecklistSetup } from "./pages/Checklist";
 import { Connect } from "./pages/Connect";
 import { Devices } from "./pages/Devices";
 import { Firebase, FirebaseSetup } from "./pages/Firebase";
-import { Game, GameSessions } from "./pages/Game";
+import { GameSessions } from "./pages/Game";
 import { Games } from "./pages/Games";
 import { Health } from "./pages/Health";
 import { Home } from "./pages/Home";
@@ -18,7 +18,6 @@ import { useApp } from "./state";
 
 const PAGES = {
   snapshooter: Snapshooter,
-  game: Game,
   "game-sessions": GameSessions,
   devices: Devices,
   games: Games,
@@ -59,10 +58,8 @@ export function App() {
               ? `saved-${archivedId}`
               : view === "snapshooter"
                 ? `snapshots-${pkg}`
-                : view === "game"
-                  ? `game-${pkg}`
-                  : view === "qa"
-                    ? `qa-${pkg}`
+                : view === "qa"
+                  ? `qa-${pkg}`
                   : [
                         "home",
                         "connect",

@@ -89,7 +89,7 @@ export function SavedSession() {
               options={[
                 {
                   value: "firebase",
-                  label: `Firebase events (${events.length})`,
+                  label: `Events (${events.length})`,
                 },
                 { value: "logs", label: `Logs (${data.entries.length})` },
                 { value: "ads", label: "Ad state" },

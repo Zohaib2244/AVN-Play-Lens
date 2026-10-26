@@ -11,6 +11,7 @@ import { Menu, Skeleton } from "../components/ui";
 import { useResource } from "../query";
 import { clock, deviceName, useApp } from "../state";
 import { useAppAction } from "./Logs";
+import { useTrackingGate } from "../components/TrackingGate";
 
 function Stepper({ step, labels }: { step: number; labels: string[] }) {
   return (
@@ -224,7 +225,7 @@ export function FirebaseSetup() {
               </div>
               <p className="muted">
                 {complete
-                  ? "Event logging works for this game. Open Firebase events to inspect the captured events and parameters."
+                  ? "Event logging works for this game. Open Events to inspect the captured events and parameters."
                   : listening
                     ? "Keep the game open and play a level. Setup completes when a Firebase event is captured on this device."
                     : "Resume capture from the command menu, or reconnect your phone, then keep the game open."}
@@ -266,9 +267,7 @@ export function FirebaseSetup() {
                 </p>
               )}
               <Button variant="primary" onClick={() => setView("firebase")}>
-                {complete
-                  ? "Done — open Firebase events"
-                  : "Open events while waiting"}
+                {complete ? "Done — open Events" : "Open events while waiting"}
               </Button>
             </>
           )}
@@ -309,10 +308,12 @@ export function Firebase() {
     gameInventory.serial === serial
       ? gameInventory.games.find((g) => g.packageId === pkg)?.installed
       : undefined;
+  const gate = useTrackingGate("Events", !!monitor);
+  if (gate) return gate;
   if (!device || installed === false)
     return (
       <main className="content">
-        <PageHead title="Firebase events" />
+        <PageHead title="Events" />
         <Panel>
           <div className="pl-empty">
             <h2>
@@ -329,7 +330,7 @@ export function Firebase() {
   if (!fb) {
     return (
       <main className="content">
-        <PageHead title="Firebase events" />
+        <PageHead title="Events" />
         <div
           className="panel"
           style={{ overflow: "hidden" }}
@@ -369,7 +370,7 @@ export function Firebase() {
 
   return (
     <main className="content">
-      <PageHead title="Firebase events" sub={`${pkg} on ${deviceName(device)}`}>
+      <PageHead title="Events" sub={`${pkg} on ${deviceName(device)}`}>
         {!fb.debug?.on && (
           <Button variant="primary" onClick={() => setView("firebase-setup")}>
             Set up event logging

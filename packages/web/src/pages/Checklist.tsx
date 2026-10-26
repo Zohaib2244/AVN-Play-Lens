@@ -14,6 +14,7 @@ import { useResource } from "../query";
 import { clock, deviceName, useApp } from "../state";
 import type { Rules } from "../types";
 import { Stepper } from "./Firebase";
+import { useTrackingGate } from "../components/TrackingGate";
 
 const SEVERITY_TAG: Record<string, string> = {
   critical: "tag-bad",
@@ -235,6 +236,8 @@ export function Checklist() {
   const run = monitor?.run;
   const elapsed = useClock(run?.startedAt, !!run?.active);
   const report = monitor?.report ?? lastReport;
+  const gate = useTrackingGate("Checklist", !!run);
+  if (gate) return gate;
   if (!run) {
     return (
       <main className="content">

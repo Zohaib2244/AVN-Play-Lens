@@ -464,3 +464,21 @@ body:has(.pl-notifications) .toasts { visibility: hidden; }
 .qa-shot { display: block; width: 100%; margin-top: 8px; border-radius: 10px; border: 1px solid var(--line); }
 .qa-findings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .qa-table tr.act td { background: var(--panel-2); }
+
+/* Game header row: the game, the phone, the session and the main action. */
+.game-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 24px 0; }
+.game-bar-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 36px; padding: 0 12px; border: var(--bw) solid var(--line); border-radius: var(--r-ctl); background: var(--panel); color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.game-bar-chip:hover { border-color: var(--line-strong); }
+.game-bar-chip .dot { flex: none; }
+.game-bar-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-bar-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.game-bar-chip.ok { color: var(--ok); }
+.game-bar-chip.warn { color: var(--warn); }
+.game-bar-chip.bad { color: var(--bad); }
+.pl-menu-heading { display: block; padding: 8px 12px 4px; }
+.pl-menu-sep { height: 1px; margin: 6px 0; background: var(--line-soft); }
+@media (max-width: 700px) {
+  .game-bar { padding: 10px 14px 0; }
+  .game-bar-end { margin-left: 0; width: 100%; }
+  .game-bar-end .btn { width: 100%; justify-content: center; }
+}

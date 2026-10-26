@@ -1,17 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 const sidebarPage = (page: Page, name: string) =>
-  page
-    .locator(".side")
-    .getByRole("button", {
-      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
-    });
+  page.locator(".side").getByRole("button", {
+    name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+  });
 async function navigate(page: Page, name: string) {
   name =
     (
       {
-        "Firebase events": "Events (Firebase)",
         "Remote Config": "Remote Config (RC)",
-        Checklist: "Checklist Verifier",
       } as Record<string, string>
     )[name] ?? name;
   if (await sidebarPage(page, name).isVisible()) {
@@ -30,13 +26,14 @@ async function navigate(page: Page, name: string) {
     .getByRole("button", { name, exact: true })
     .click();
 }
+const gameBar = (page: Page) => page.locator(".game-bar");
 async function openGame(page: Page) {
   await page.goto("/");
   await page
     .getByRole("button", { name: "Open PlayLens Demo", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "PlayLens Demo", exact: true }),
+    gameBar(page).getByText("PlayLens Demo", { exact: true }),
   ).toBeVisible();
 }
 async function noOverflow(page: Page) {
@@ -72,7 +69,7 @@ test("library and every workspace page preserve the AVN layouts", async ({
     .getByRole("button", { name: "Open PlayLens Demo", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "PlayLens Demo", exact: true }),
+    gameBar(page).getByText("PlayLens Demo", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: info.outputPath("Overview.png"),
@@ -81,8 +78,8 @@ test("library and every workspace page preserve the AVN layouts", async ({
   for (const name of [
     "Logs",
     "Performance",
-    "Plugin health",
-    "Firebase events",
+    "Health",
+    "Events",
     "Remote Config",
     "Checklist",
     "Level Snapshooter",

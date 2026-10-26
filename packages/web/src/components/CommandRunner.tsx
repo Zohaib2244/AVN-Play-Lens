@@ -15,7 +15,7 @@ import { resourceKey, useResource } from "../query";
 import { deviceName, useApp } from "../state";
 import type { Game, SavedDevice } from "../types";
 import { GameIcon } from "./GameIcon";
-import { LIBRARY, MAIN, INSPECT, TOOLS } from "../nav-items";
+import { GAME_TABS, LIBRARY, TOOLS } from "../nav-items";
 
 type Parameter = "game" | "device" | "saved-device";
 /** Add an action, its parameter kind and its handler here; selection/search is shared. */
@@ -71,7 +71,7 @@ export function CommandRunner({
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const gameActions: Action[] = [...MAIN, ...INSPECT, ...TOOLS].map((page) => ({
+  const gameActions: Action[] = [...GAME_TABS, ...TOOLS].map((page) => ({
     ...page,
     group: "Pages",
     parameter: "game",
@@ -91,33 +91,29 @@ export function CommandRunner({
       group: "Pages",
       run: () => setView("connect"),
     },
-    ...games.map(
-      (game): Action => ({
-        id: `game:${game.id}`,
-        label: game.name,
-        game,
-        icon: "pad",
-        group: "Games",
-        hint: game.packageId,
-        run: () => openGame(game.packageId),
-      }),
-    ),
-    ...devices.map(
-      (phone): Action => ({
-        id: `device:${phone.serial}`,
-        label: phone.replay ? "Demo simulator" : deviceName(phone),
-        icon: "link",
-        group: "Devices",
-        hint: phone.serial === serial ? "Active device" : phone.serial,
-        disabled:
-          phone.state !== "device"
-            ? "Device is not ready"
-            : phone.replay && devices.some((d) => !d.replay)
-              ? "Real phone takes priority"
-              : undefined,
-        run: () => selectDevice(phone),
-      }),
-    ),
+    ...games.map((game): Action => ({
+      id: `game:${game.id}`,
+      label: game.name,
+      game,
+      icon: "pad",
+      group: "Games",
+      hint: game.packageId,
+      run: () => openGame(game.packageId),
+    })),
+    ...devices.map((phone): Action => ({
+      id: `device:${phone.serial}`,
+      label: phone.replay ? "Demo simulator" : deviceName(phone),
+      icon: "link",
+      group: "Devices",
+      hint: phone.serial === serial ? "Active device" : phone.serial,
+      disabled:
+        phone.state !== "device"
+          ? "Device is not ready"
+          : phone.replay && devices.some((d) => !d.replay)
+            ? "Real phone takes priority"
+            : undefined,
+      run: () => selectDevice(phone),
+    })),
     {
       id: "switch-game",
       label: "Switch game",

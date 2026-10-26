@@ -172,43 +172,65 @@ export function Disclosure({
     </section>
   );
 }
+export interface MenuEntry {
+  label?: string;
+  heading?: string;
+  sep?: boolean;
+  hidden?: boolean;
+  href?: string | null;
+  download?: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+  pressed?: boolean;
+  onClick?: () => unknown;
+}
+
 export function Menu({
   items,
   label = "More",
+  trigger,
+  className = "btn",
+  align = "end",
 }: {
-  items: ({
-    label: string;
-    hidden?: boolean;
-    href?: string | null;
-    download?: boolean;
-    danger?: boolean;
-    pressed?: boolean;
-    onClick?: () => unknown;
-  } | null)[];
+  items: (MenuEntry | null)[];
   label?: string;
+  trigger?: ReactNode;
+  className?: string;
+  align?: "start" | "end";
 }) {
   const container = useAppContainer();
-  const shown = items.filter(
-    (i): i is NonNullable<typeof i> => !!i && !i.hidden,
-  );
+  const shown = items.filter((i): i is MenuEntry => !!i && !i.hidden);
   if (!shown.length) return null;
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button className="btn" aria-label={label} title={label}>
-          <Icon name="more" />
+        <button className={className} aria-label={label} title={label}>
+          {trigger ?? <Icon name="more" />}
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal container={container ?? undefined}>
         <DropdownMenu.Content
           className="pop pl-dropdown"
-          align="end"
+          align={align}
           sideOffset={6}
           collisionPadding={12}
           loop
         >
-          {shown.map((item) =>
-            item.href ? (
+          {shown.map((item, i) => {
+            if (item.heading)
+              return (
+                <DropdownMenu.Label
+                  className="eyebrow pl-menu-heading"
+                  key={`h${i}`}
+                >
+                  {item.heading}
+                </DropdownMenu.Label>
+              );
+            if (item.sep)
+              return (
+                <DropdownMenu.Separator className="pl-menu-sep" key={`s${i}`} />
+              );
+            return item.href ? (
               <DropdownMenu.Item asChild key={item.label}>
                 <a
                   className="ni"
@@ -224,6 +246,7 @@ export function Menu({
               <DropdownMenu.Item
                 className={`ni${item.danger ? " badc" : ""}`}
                 key={item.label}
+                disabled={item.disabled}
                 onSelect={item.onClick}
               >
                 {item.pressed != null && (
@@ -234,8 +257,8 @@ export function Menu({
                 )}
                 {item.label}
               </DropdownMenu.Item>
-            ),
-          )}
+            );
+          })}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

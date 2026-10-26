@@ -238,9 +238,9 @@ test("config exposes missing fallbacks and opens full-width fields with a broad 
   const search = page.getByRole("combobox", {
     name: "Search pages, games and actions",
   });
-  await search.fill("Plugin health");
+  await search.fill("Health");
   const option = page.getByRole("option", {
-    name: "Plugin health",
+    name: "Health",
     exact: true,
   });
   await expect(option).toBeVisible();

@@ -38,7 +38,7 @@ test("commands select game parameters from any page, control capture, and preser
   );
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
-  await command(page, "firebase");
+  await command(page, "Events");
   const options = page.getByRole("listbox", { name: "Action parameters" });
   await expect(
     options.getByRole("option", { name: /PlayLens Demo/ }),
@@ -53,20 +53,20 @@ test("commands select game parameters from any page, control capture, and preser
   await expect(
     page.getByRole("heading", { name: "This game is not installed." }),
   ).toBeVisible();
-  await command(page, "firebase");
+  await command(page, "Events");
   await page.getByRole("combobox").fill("PlayLens Demo");
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "Firebase events", exact: true }),
+    page.getByRole("heading", { name: "Events", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Receiving events", { exact: true }),
   ).toBeVisible();
   await command(page, "Stop capture session");
-  await expect(page.locator(".pl-context-end")).toHaveText("Capture stopped");
+  await expect(page.locator(".game-bar .status-chip")).toContainText("Stopped");
   await command(page, "Resume capture");
   await expect(
-    page.getByRole("heading", { name: "Firebase events", exact: true }),
+    page.getByRole("heading", { name: "Events", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Receiving events", { exact: true }),
@@ -95,14 +95,12 @@ test("overview, config expansion, event dictionary, setup completion and appeara
   page,
 }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/?view=game&game=com.avn.demo");
+  await page.goto("/?view=logs&game=com.avn.demo");
   await expect(
-    page.getByRole("heading", { name: "PlayLens Demo", exact: true }),
+    page.locator(".game-bar").getByText("PlayLens Demo", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Game and capture status" }),
-  ).toBeVisible();
-  await expect(page.getByText(/Auto-save is off/)).toBeVisible();
+  await expect(page.locator(".game-bar")).toBeVisible();
+  await expect(page.locator(".game-bar .status-chip")).toBeVisible();
   await expect(page.locator(".pl-overview .tiles")).toHaveCount(0);
   await expect(
     page
@@ -170,7 +168,7 @@ test("overview, config expansion, event dictionary, setup completion and appeara
   await page.getByRole("button", { name: "Next: listen for events" }).click();
   await expect(page.getByText("Setup complete", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Done — open Firebase events" }),
+    page.getByRole("button", { name: "Done — open Events" }),
   ).toBeVisible();
   await noOverflow(page);
   await page.screenshot({
@@ -188,7 +186,7 @@ test("overview, config expansion, event dictionary, setup completion and appeara
     animations: "disabled",
   });
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.goto("/?view=game&game=com.avn.demo");
+  await page.goto("/?view=logs&game=com.avn.demo");
   await noOverflow(page);
   await page.screenshot({
     path: info.outputPath("Overview-light-moss.png"),
@@ -200,8 +198,9 @@ test("large game icons resize, editing stays focused, and notifications use a dr
   page,
 }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/?view=game&game=com.avn.demo");
-  await page.getByRole("button", { name: "Edit game", exact: true }).click();
+  await page.goto("/?view=logs&game=com.avn.demo");
+  await page.getByRole("button", { name: "Game", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit name & icon" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit game", exact: true });
   const name = dialog.getByRole("textbox", { name: "Game name" });
   await name.fill("PlayLens Demo edited");

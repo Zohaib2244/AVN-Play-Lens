@@ -9,10 +9,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { Icon, PageHead } from "../components/bits";
 import { Grouped } from "../components/Grouped";
-import { ActionButton, LiveBars, Menu, SkeletonLog } from "../components/ui";
+import { LiveBars, Menu, SkeletonLog } from "../components/ui";
 import { useViewPreference, useViewState } from "../route-state";
 import { clock, deviceName, useApp } from "../state";
 import type { LogEntry } from "../types";
+import { useTrackingGate } from "../components/TrackingGate";
 
 const LOG_COLUMNS: ColumnDef<LogEntry>[] = [
   { accessorKey: "ts" },
@@ -177,7 +178,6 @@ export function Logs() {
   const [follow, setFollow] = useState(true);
   const [lastId, setLastId] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const appAction = useAppAction();
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -281,6 +281,8 @@ export function Logs() {
     gameInventory.serial === serial
       ? gameInventory.games.find((g) => g.packageId === pkg)?.installed
       : undefined;
+  const gate = useTrackingGate("Logs", lines.current.length > 0);
+  if (gate) return gate;
   if (!device || installed === false) {
     return (
       <main className="content">
@@ -361,21 +363,8 @@ export function Logs() {
             )}
           </button>
         )}
-        {pkg && !device.replay && (
-          <ActionButton
-            onClick={() => appAction(stream.running ? "restart" : "launch")}
-            busyLabel={stream.running ? "Restarting…" : "Launching…"}
-          >
-            <Icon.restart /> {stream.running ? "Restart game" : "Launch game"}
-          </ActionButton>
-        )}
         <Menu
           items={[
-            {
-              label: "Stop the game",
-              onClick: () => appAction("stop"),
-              hidden: !pkg || device.replay || !stream.running,
-            },
             {
               label: "Save this log (.txt)",
               href: sessionId ? `/api/sessions/${sessionId}.txt` : null,
@@ -386,11 +375,6 @@ export function Logs() {
               label: "Pop-up alerts for crashes and errors",
               pressed: alerts,
               onClick: () => setAlerts(!alerts),
-            },
-            {
-              label: "Stop collecting logs",
-              onClick: toggleStopped,
-              hidden: stopped,
             },
           ]}
         />

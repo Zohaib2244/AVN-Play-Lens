@@ -14,6 +14,7 @@ import type {
   RuntimeCheck,
   SdkCard as SdkCardData,
 } from "../types";
+import { useTrackingGate } from "../components/TrackingGate";
 
 const STEP_NAMES: Record<string, string> = {
   awake: "Awake",
@@ -328,7 +329,7 @@ export function Health() {
   const h = monitor?.health;
   const head = (sub?: string) => (
     <PageHead
-      title="Plugin health"
+      title="Health"
       sub={
         sub ??
         `AVN plugin · ${pkg || "no game picked"} on ${deviceName(device)}`
@@ -340,6 +341,8 @@ export function Health() {
     gameInventory.serial === serial
       ? gameInventory.games.find((g) => g.packageId === pkg)?.installed
       : undefined;
+  const gate = useTrackingGate("Health", !!monitor);
+  if (gate) return gate;
   if (!device || installed === false)
     return (
       <main className="content">
@@ -431,7 +434,7 @@ export function Health() {
   return (
     <main className="content pl-health" style={{ gap: 22 }}>
       <PageHead
-        title="Plugin health"
+        title="Health"
         sub={`AVN plugin · ${pkg} on ${deviceName(device)}${startedLabel ? ` · ${startedLabel}` : ""}`}
       >
         {h.debugLogs === "off" && (

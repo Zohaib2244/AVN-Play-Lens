@@ -19,16 +19,17 @@ import {
 } from "@avn/ui";
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { useViewPreference } from "../route-state";
-import { deviceName, useApp } from "../state";
-import { healthIssues } from "../health-issues";
+import { useApp } from "../state";
+import { tabBadges } from "../tab-badges";
 import { GameIcon } from "./GameIcon";
+import { GameBar } from "./GameBar";
 import { CommandRunner } from "./CommandRunner";
 
-import { LIBRARY, MAIN, INSPECT, TOOLS } from "../nav-items";
+import { GAME_TABS, LIBRARY, TOOLS } from "../nav-items";
 const EXTRA: NavItem[] = [
   { id: "connect", label: "Connect a device", icon: "link" },
 ];
-const ALL_PAGES = [...LIBRARY, ...MAIN, ...INSPECT, ...TOOLS, ...EXTRA];
+const ALL_PAGES = [...LIBRARY, ...GAME_TABS, ...TOOLS, ...EXTRA];
 
 function readPreference(key: string, fallback: string) {
   try {
@@ -84,18 +85,15 @@ export function PlayLensShell({ children }: PropsWithChildren) {
       : view;
   const current =
     ALL_PAGES.find((p) => p.id === active)?.label || "Saved session";
-  const live = inGameWorkspace && !stopped && stream.state === "live";
+  // Things to look at show as counts on the game's tabs.
+  const badges = tabBadges(monitor);
+  const gameTabs = GAME_TABS.map((p) => {
+    const count = badges[p.id as keyof typeof badges] || undefined;
+    return count ? { ...p, count } : p;
+  });
   const groups = inGameWorkspace
     ? [
-        {
-          label: "Main",
-          items: MAIN.map((p) =>
-            p.id === "health"
-              ? { ...p, count: healthIssues(monitor).length || undefined }
-              : p,
-          ),
-        },
-        { label: "Inspect", items: INSPECT },
+        { label: "Game", items: gameTabs },
         { label: "Tools", items: TOOLS },
         { label: "Workspace", items: LIBRARY },
       ]
@@ -103,7 +101,7 @@ export function PlayLensShell({ children }: PropsWithChildren) {
         { label: "Workspace", items: LIBRARY },
         { label: "Get started", items: EXTRA },
       ];
-  const tabs = inGameWorkspace ? [MAIN[0], INSPECT[0], MAIN[1]] : LIBRARY;
+  const tabs = inGameWorkspace ? gameTabs : LIBRARY;
   const select = (id: string) => setView(id);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -250,7 +248,7 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               ? [
                   {
                     label: game?.name ?? "Game",
-                    onClick: () => setView("game"),
+                    onClick: () => setView("logs"),
                   },
                 ]
               : []),
@@ -321,39 +319,7 @@ export function PlayLensShell({ children }: PropsWithChildren) {
               </span>
             </div>
           )}
-          {view !== "home" && (
-            <div className="pl-context">
-              <span
-                className={`tag ${device?.replay ? "plain" : live ? "ok" : "info"}`}
-              >
-                {device?.replay
-                  ? "Demo replay"
-                  : live
-                    ? "Live capture"
-                    : device
-                      ? "Device ready"
-                      : "No device"}
-              </span>
-              <span>
-                {device
-                  ? deviceName(device)
-                  : "Connect an Android phone to test a build"}
-              </span>
-              <span className="pl-context-end">
-                {stopped
-                  ? "Capture stopped"
-                  : device?.replay
-                    ? "Simulated evidence · no live phone"
-                    : live
-                      ? "Collecting this game only"
-                      : !device
-                        ? "Connect a phone to begin"
-                        : stopped
-                          ? "Capture stopped"
-                          : "Waiting for game logs"}
-              </span>
-            </div>
-          )}
+          {inGameWorkspace && view !== "saved-session" && <GameBar />}
           {children}
         </div>
       </Workspace>

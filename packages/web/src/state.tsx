@@ -37,10 +37,11 @@ import type {
 
 const AppContext = createContext<ReturnType<typeof useAppState> | null>(null);
 const MAX_LINES = 50000;
+// A restart this soon after an unsaved, crash-free session replaces it instead of saving a near-empty one.
+const THROWAWAY_MS = 30000;
 const GAME_VIEWS = new Set([
   "qa",
   "snapshooter",
-  "game",
   "logs",
   "performance",
   "health",
@@ -456,7 +457,7 @@ function useAppState() {
     [setPkg],
   );
   const openGame = useCallback(
-    (packageId: string, destination: View = "game") => {
+    (packageId: string, destination: View = "logs") => {
       setFollow(false);
       updatePackage(packageId);
       void navigate({
@@ -489,6 +490,16 @@ function useAppState() {
     },
     [navigate],
   );
+  // Keep an unsaved session only if you saved it or it caught a crash.
+  const throwaway = useCallback(
+    () =>
+      !!session &&
+      !session.saved &&
+      !!session.startedAt &&
+      Date.now() - session.startedAt < THROWAWAY_MS &&
+      !lines.current.some((e) => ALERT_KINDS[e.kind ?? ""]),
+    [session],
+  );
   const performGameAction = useCallback(
     async (packageId: string, action: string) => {
       if (actionBusy || !serial || !online) return;
@@ -515,7 +526,7 @@ function useAppState() {
             };
           });
           selectGame(packageId);
-          if (pkg === packageId) newSession();
+          if (pkg === packageId) newSession(throwaway() ? "discard" : "save");
           else setStopped(false);
           await ready;
         }

@@ -296,7 +296,7 @@ export function Snapshooter() {
                     }
                   </pre>
                   <p>
-                    Enable Firebase debug mode from Firebase events if your
+                    Enable Firebase debug mode from Events if your
                     level events are not appearing. You can also enter the level
                     number below.
                   </p>

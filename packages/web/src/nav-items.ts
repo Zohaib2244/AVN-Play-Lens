@@ -17,4 +17,5 @@ export const TOOLS: NavItem[] = [
   { id: "snapshooter", label: "Level Snapshooter", icon: "grid" },
   { id: "checklist", label: "Checklist Verifier", icon: "checklist" },
   { id: "performance", label: "Performance", icon: "pulse" },
+  { id: "qa", label: "QA runs", icon: "shield" },
 ];

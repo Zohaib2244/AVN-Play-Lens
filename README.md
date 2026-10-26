@@ -61,9 +61,15 @@ npm run replay     # adds a "Replay device" that plays a saved log (packages/ser
 
 Pass your own capture with `node packages/server/bin/avn-playlens.mjs --replay my.logcat`. Captures must be in `adb logcat -v threadtime -v epoch` format.
 
+## QA runs
+
+Each game workspace has a **QA runs** page: pick a plan (plugin smoke, ADB smoke, level progression, in-app purchase, or plans from the game's rules file under `qa.plans`), press Run, and come back to a report with steps, checks, screenshots, findings and performance. The run owns the phone until it ends and keeps collecting with the tab closed. Results are kept under `~/.avn-playlens/qa-runs/<run id>/` with a Markdown export.
+
+Bridge-driven plans need the game built with the AVN QA SDK (`packages/unity-qa-sdk`, menu **AVN → QA → Enable QA build**). Hooks a game did not wire are reported as *not supported*, never as passed. See [docs/QA_PLAN.md](docs/QA_PLAN.md) for the design, the step vocabulary and what is still to come.
+
 ## Develop
 
-See [the automated game QA plan](docs/QA_PLAN.md) for the proposed runner, Unity Test Framework integration, AVN QA Bridge and AI exploration roadmap.
+See [the automated game QA plan](docs/QA_PLAN.md) for the QA SDK, runner design and roadmap.
 
 ```bash
 npm run dev:server   # API on 7420 with the replay device

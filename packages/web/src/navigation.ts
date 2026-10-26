@@ -16,6 +16,7 @@ export const VIEWS = [
   "checklist",
   "checklist-setup",
   "snapshooter",
+  "qa",
 ] as const;
 export type View = (typeof VIEWS)[number];
 export interface ViewSearch extends Record<string, unknown> {

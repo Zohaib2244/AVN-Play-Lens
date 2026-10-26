@@ -439,3 +439,28 @@ body:has(.pl-notifications) .toasts { visibility: hidden; }
   .pl-json-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pl-json-children { margin-left: 10px; padding-left: 8px; }
 }
+
+/* ── QA runs ─────────────────────────────────────────────────────────────── */
+.qa-start { padding: 20px 22px; }
+.qa-start-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.qa-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.qa-field .select, .qa-field .input { min-width: 240px; }
+.qa-detail { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+.qa-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--dim); }
+.qa-summary .bad { color: var(--bad); }
+.qa-manual { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 12px; background: var(--warm-soft); border: 1px solid #6b4a36; }
+.qa-manual strong { font-size: 17px; color: var(--warm-text); }
+.qa-body { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; }
+@media (max-width: 900px) { .qa-body { grid-template-columns: 1fr; } }
+.qa-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.qa-step { padding: 10px 10px; border-top: 1px solid var(--line-soft); border-radius: 10px; }
+.qa-step.act { background: var(--panel-2); }
+.qa-step-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.qa-step-head strong { flex: 1 1 auto; font-size: 14.5px; }
+.qa-checks { list-style: none; margin: 8px 0 0 30px; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.qa-checks li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.qa-shot-link img { display: block; height: 120px; margin: 8px 0 0 30px; border-radius: 8px; border: 1px solid var(--line); }
+.qa-side { display: flex; flex-direction: column; gap: 18px; font-size: 13.5px; }
+.qa-shot { display: block; width: 100%; margin-top: 8px; border-radius: 10px; border: 1px solid var(--line); }
+.qa-findings { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.qa-table tr.act td { background: var(--panel-2); }

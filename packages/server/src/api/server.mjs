@@ -20,6 +20,8 @@ import { SessionRecorder, listSessions, sessionText, sessionDetails, deleteSessi
 import { spawn } from 'node:child_process';
 import { SnapshotStore, LevelSnapshooter, levelNumber } from '../snapshots/snapshots.mjs';
 import { Health } from '../monitor/health.mjs';
+import { QARunner } from '../qa/runner.mjs';
+import { runMarkdown } from '../qa/report.mjs';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
 const ADDRESS_RE = /^[\w.-]+:\d{2,5}$/;
@@ -51,6 +53,8 @@ export function createServer(ctx) {
   const snapshots = ctx.snapshots ?? new SnapshotStore();
   const snapshooter = new LevelSnapshooter({ adb: ctx.adb, store: snapshots,
     connected: (serial) => ctx.devices().some((d) => d.serial === serial && d.state === 'device') });
+  // QA runs own a phone while they run; they keep their own capture alive without a browser.
+  const qa = ctx.qa ?? new QARunner({ adb: ctx.adb, rules: ctx.rules, games, devices: ctx.devices, deviceName, record: ctx.record !== false, ...(ctx.qaDir ? { dir: ctx.qaDir } : {}) });
 
   const readJson = (req, limit = 512 * 1024) => new Promise((resolve, reject) => {
     let data = ''; let bytes = 0;
@@ -157,6 +161,8 @@ export function createServer(ctx) {
         if (!games.list().some((g) => g.packageId === pkg)) return send(res, 403, { error: 'Add this game to your library first' });
         if (!ctx.devices().some((d) => d.serial === id && d.state === 'device')) return send(res, 409, { error: 'Phone is not connected' });
         if (!(await listPackages(ctx.adb, id)).includes(pkg)) return send(res, 404, { error: 'This game is not installed on the selected phone' });
+        const owner = qa.activeFor(id);
+        if (owner) return send(res, 409, { error: `QA run ${owner.id} is using this phone. Cancel it first.`, runId: owner.id });
         await appActions[action](ctx.adb, id, pkg);
         return send(res, 200, { ok: true });
       }
@@ -267,6 +273,40 @@ export function createServer(ctx) {
       const ok = /^(?:already )?connected to /im.test(out);
       return send(res, ok ? 200 : 502, { ok, message: out.trim(), ...(!ok && { error: out.trim() || 'Connection failed' }) });
     }
+    if (area === 'qa') {
+      if (req.method === 'GET' && id === 'plans') {
+        const qpkg = url.searchParams.get('pkg');
+        if (qpkg && !PACKAGE_RE.test(qpkg)) return send(res, 400, { error: 'Invalid game package' });
+        return send(res, 200, qa.plans(qpkg));
+      }
+      if (id === 'runs' && !sub) {
+        if (req.method === 'GET') {
+          const qpkg = url.searchParams.get('pkg');
+          if (qpkg && !PACKAGE_RE.test(qpkg)) return send(res, 400, { error: 'Invalid game package' });
+          return send(res, 200, { runs: qa.list(qpkg) });
+        }
+        if (req.method === 'POST') {
+          const body = await readJson(req);
+          try { return send(res, 201, { run: await qa.start({ pkg: body.pkg, serial: body.serial, planId: body.plan, options: body.options ?? {} }) }); }
+          catch (err) { return send(res, err.statusCode || 400, { error: err.message, ...(err.runId ? { runId: err.runId } : {}), ...(err.missing ? { missing: err.missing } : {}) }); }
+        }
+      }
+      if (id === 'runs' && sub) {
+        const run = qa.get(sub);
+        if (!run) return send(res, 404, { error: 'Run not found' });
+        if (req.method === 'GET' && !pkg) return send(res, 200, { run });
+        if (req.method === 'GET' && pkg === 'report.md') return download(res, runMarkdown(run), 'text/markdown; charset=utf-8', `${run.id}.md`);
+        if (req.method === 'GET' && pkg === 'files' && action) {
+          const file = qa.file(sub, action);
+          if (!file) return send(res, 404, { error: 'File not found' });
+          const body = await readFile(file);
+          if (action.endsWith('.png')) { res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); return res.end(body); }
+          return download(res, body, action.endsWith('.json') ? 'application/json' : 'text/plain; charset=utf-8', action);
+        }
+        if (req.method === 'POST' && pkg === 'cancel') return send(res, qa.cancel(sub, (await readJson(req)).reason) ? 200 : 409, { ok: true });
+        if (req.method === 'DELETE' && !pkg) return qa.remove(sub) ? send(res, 200, { ok: true }) : send(res, 409, { error: 'Run is active or missing' });
+      }
+    }
     return send(res, 404, { error: 'not found' });
   }
 
@@ -317,6 +357,7 @@ export function createServer(ctx) {
     for (const ws of clients) if (ws.readyState === 1) ws.send(text);
   };
   ctx.onDevices((devices) => broadcast({ type: 'devices', devices }));
+  qa.on('update', (run) => broadcast({ type: 'qa.run', run }));
   ctx.pairing?.on('update', (state) => broadcast({ type: 'pair', ...state }));
 
   const liveMonitors = new Set();
@@ -566,6 +607,7 @@ export function createServer(ctx) {
       for (const ws of clients) ws.terminate();
       wss.close();
       await snapshooter.close();
+      await qa.close();
       await new Promise((resolve) => server.close(resolve));
       await Promise.allSettled([...pendingCloses]);
     },

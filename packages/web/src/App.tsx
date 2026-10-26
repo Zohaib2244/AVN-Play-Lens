@@ -10,6 +10,7 @@ import { Health } from "./pages/Health";
 import { Home } from "./pages/Home";
 import { Logs } from "./pages/Logs";
 import { Performance } from "./pages/Performance";
+import { QARuns } from "./pages/QARuns";
 import { RemoteConfig } from "./pages/RemoteConfig";
 import { SavedSession, Sessions } from "./pages/Sessions";
 import { Snapshooter } from "./pages/Snapshooter";
@@ -31,6 +32,7 @@ const PAGES = {
   "remote-config": RemoteConfig,
   checklist: Checklist,
   "checklist-setup": ChecklistSetup,
+  qa: QARuns,
 };
 
 export function App() {
@@ -59,6 +61,8 @@ export function App() {
                 ? `snapshots-${pkg}`
                 : view === "game"
                   ? `game-${pkg}`
+                  : view === "qa"
+                    ? `qa-${pkg}`
                   : [
                         "home",
                         "connect",

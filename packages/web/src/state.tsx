@@ -38,6 +38,7 @@ import type {
 const AppContext = createContext<ReturnType<typeof useAppState> | null>(null);
 const MAX_LINES = 50000;
 const GAME_VIEWS = new Set([
+  "qa",
   "snapshooter",
   "game",
   "logs",
@@ -175,6 +176,7 @@ function useAppState() {
   const perf = useRef<PerfSample[]>([]); // performance samples, one per second
   const [perfSummary, setPerfSummary] = useState<PerfSummary | null>(null);
   const [perfVersion, setPerfVersion] = useState(0);
+  const [qaVersion, setQaVersion] = useState(0);
   const socket = useRef<ReturnType<typeof connectSocket> | null>(null);
   const streamId = useRef(0);
   const raf = useRef(0);
@@ -225,6 +227,7 @@ function useAppState() {
       )
         return;
       if (msg.type === "run.report") return setLastReport(msg);
+      if (msg.type === "qa.run") return setQaVersion((v) => v + 1);
       if (
         "streamId" in msg &&
         msg.streamId !== undefined &&
@@ -607,6 +610,7 @@ function useAppState() {
       perf,
       perfSummary,
       perfVersion,
+      qaVersion,
       showInLogs: (entryId: number) => {
         setFocusEntry(entryId);
         setView("logs");
@@ -638,6 +642,7 @@ function useAppState() {
       stopped,
       perfSummary,
       perfVersion,
+      qaVersion,
       session,
       captureVersion,
       historyVersion,

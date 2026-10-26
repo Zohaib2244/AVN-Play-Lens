@@ -469,6 +469,7 @@ export type ServerMessage =
   | { type: "devices"; devices: Device[] }
   | ({ type: "pair" } & PairState)
   | { type: "error"; message: string }
+  | { type: "qa.run" }
   | ({ type: "run.report"; streamId?: number } & Report)
   | {
       type: "stream.state";

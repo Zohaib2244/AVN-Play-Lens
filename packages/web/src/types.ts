@@ -472,6 +472,8 @@ export type ServerMessage =
   | ({ type: "pair" } & PairState)
   | { type: "error"; message: string }
   | { type: "qa.run" }
+  | { type: "install.job"; job: InstallJob }
+  | { type: "build.source"; gameId: string }
   | ({ type: "run.report"; streamId?: number } & Report)
   | {
       type: "stream.state";
@@ -497,3 +499,69 @@ export type ServerMessage =
       summary: PerfSummary;
     }
   | { type: "log.batch"; streamId?: number; entries: LogEntry[]; rate: number };
+
+/** A game's build source and installs (server: packages/server/src/install). */
+export interface BuildArtifact {
+  path: string;
+  name: string;
+  kind: "apk" | "aab";
+  size: number;
+  modifiedAt: number;
+  fingerprint: string;
+  packageId: string;
+  versionCode: number | null;
+  versionName: string | null;
+  minSdk?: number | null;
+  abis?: string[];
+}
+export type BuildSource =
+  | { type: "file"; path: string; uploaded: boolean; autoInstall: boolean }
+  | { type: "folder"; dir: string; pattern: string; autoInstall: boolean };
+export interface BuildStatus {
+  state: "ready" | "waiting" | "settling" | "error";
+  code?: string;
+  message: string;
+  hint?: string | null;
+  at: number;
+}
+export interface InstallError {
+  code: string;
+  message: string;
+  hint: string | null;
+  retry: "uninstall" | "again" | null;
+  output: string | null;
+}
+export interface InstallStep {
+  id: string;
+  label: string;
+  status: "running" | "done" | "failed" | "cancelled";
+  detail: string | null;
+  startedAt: number;
+  endedAt: number | null;
+}
+export interface InstallJob {
+  id: string;
+  gameId: string;
+  packageId: string;
+  gameName: string;
+  serial: string;
+  device: string;
+  trigger: "manual" | "auto";
+  uninstallFirst: boolean;
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
+  steps: InstallStep[];
+  artifact: Pick<BuildArtifact, "name" | "path" | "kind" | "versionName" | "versionCode" | "size" | "modifiedAt" | "fingerprint"> | null;
+  error: InstallError | null;
+  installed: { versionName: string | null; versionCode: number | null } | null;
+  createdAt: number;
+  startedAt: number | null;
+  endedAt: number | null;
+}
+export interface BuildState {
+  source: BuildSource | null;
+  latest: BuildArtifact | null;
+  status: BuildStatus | null;
+  installs: Record<string, { fingerprint: string; ok: boolean; at: number }>;
+  jobs?: InstallJob[];
+  tools?: { bundletool: boolean; java: boolean };
+}

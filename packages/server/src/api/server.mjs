@@ -22,6 +22,9 @@ import { SnapshotStore, LevelSnapshooter, levelNumber } from '../snapshots/snaps
 import { Health } from '../monitor/health.mjs';
 import { QARunner } from '../qa/runner.mjs';
 import { runMarkdown } from '../qa/report.mjs';
+import { BuildSources } from '../install/builds.mjs';
+import { Installer } from '../install/installer.mjs';
+import { locateBundleTools } from '../install/tools.mjs';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
 const ADDRESS_RE = /^[\w.-]+:\d{2,5}$/;
@@ -55,6 +58,16 @@ export function createServer(ctx) {
     connected: (serial) => ctx.devices().some((d) => d.serial === serial && d.state === 'device') });
   // QA runs own a phone while they run; they keep their own capture alive without a browser.
   const qa = ctx.qa ?? new QARunner({ adb: ctx.adb, rules: ctx.rules, games, devices: ctx.devices, deviceName, record: ctx.record !== false, ...(ctx.qaDir ? { dir: ctx.qaDir } : {}) });
+  // Where each game's APK/AAB comes from, and the installs onto phones.
+  const builds = ctx.builds ?? new BuildSources({ games, ...(ctx.dataDir ? { dir: ctx.dataDir } : {}) });
+  const bundleTools = ctx.bundleTools ?? locateBundleTools;
+  const installer = new Installer({
+    adb: ctx.adb, sources: builds, games, devices: ctx.devices, tools: bundleTools, ...(ctx.dataDir ? { dir: ctx.dataDir } : {}),
+    busy: (serial) => { const run = qa.activeFor(serial); return run ? `QA run ${run.id} is using this phone` : null; },
+    onInstalled: (serial, pkg) => inventory?.versions.delete(`${serial}:${pkg}`),
+  });
+  const installBusy = (serial) => { const job = installer.activeFor(serial); return job ? `${job.gameName} is being installed on this phone. Wait for it to finish.` : null; };
+  const sendError = (res, err) => send(res, err.statusCode || 400, { error: err.message, ...(err.code ? { code: err.code } : {}), ...(err.hint ? { hint: err.hint } : {}), ...(err.jobId ? { jobId: err.jobId } : {}) });
 
   const readJson = (req, limit = 512 * 1024) => new Promise((resolve, reject) => {
     let data = ''; let bytes = 0;
@@ -120,7 +133,41 @@ export function createServer(ctx) {
         catch (err) { return send(res, err.message === 'Game not found' ? 404 : 400, { error: err.message }); }
       }
       if (req.method === 'GET' && id) { const game = games.list().find((g) => g.id === id); return game ? send(res, 200, game) : send(res, 404, { error: 'Game not found' }); }
-      if (req.method === 'DELETE' && id) return games.remove(id) ? send(res, 200, { ok: true }) : send(res, 404, { error: 'Game not found' });
+      if (req.method === 'DELETE' && id) {
+        if (!games.remove(id)) return send(res, 404, { error: 'Game not found' });
+        await builds.clearSource(id);
+        return send(res, 200, { ok: true });
+      }
+    }
+
+    if (area === 'builds' && id) {
+      try {
+        if (req.method === 'GET' && !sub) {
+          builds.game(id);
+          const tools = bundleTools();
+          return send(res, 200, { ...builds.get(id), jobs: installer.list({ gameId: id }).slice(0, 20), tools: { bundletool: !!tools.jar, java: !!tools.java } });
+        }
+        if (sub === 'source' && req.method === 'PUT') return send(res, 200, await builds.setSource(id, await readJson(req)));
+        if (sub === 'source' && req.method === 'PATCH') {
+          const body = await readJson(req);
+          if (typeof body.autoInstall !== 'boolean') return send(res, 400, { error: 'Choose whether automatic install is on or off' });
+          builds.game(id);
+          return send(res, 200, builds.setAutoInstall(id, body.autoInstall));
+        }
+        if (sub === 'source' && req.method === 'DELETE') { builds.game(id); await builds.clearSource(id); return send(res, 200, builds.get(id)); }
+        if (sub === 'upload' && req.method === 'POST') return send(res, 201, await builds.saveUpload(id, req, url.searchParams.get('name')));
+        if (sub === 'rescan' && req.method === 'POST') { builds.game(id); return send(res, 200, await builds.rescan(id)); }
+      } catch (err) { return sendError(res, err); }
+    }
+    if (area === 'installs') {
+      if (req.method === 'GET' && !id) return send(res, 200, { jobs: installer.list({ gameId: url.searchParams.get('gameId') || undefined }) });
+      if (req.method === 'POST' && !id) {
+        const body = await readJson(req);
+        try { return send(res, 201, { job: installer.start({ gameId: body.gameId, serial: body.serial, uninstallFirst: body.uninstallFirst === true }) }); }
+        catch (err) { return sendError(res, err); }
+      }
+      if (req.method === 'GET' && id && !sub) { const job = installer.get(id); return job ? send(res, 200, { job }) : send(res, 404, { error: 'Install not found' }); }
+      if (req.method === 'POST' && id && sub === 'cancel') return installer.cancel(id) ? send(res, 200, { ok: true }) : send(res, 409, { error: 'This install already finished' });
     }
     if (req.method === 'GET' && area === 'devices' && id && sub === 'games') {
       if (isReplay(id)) return send(res, 200, games.list().map((g) => ({ ...g, installed: g.packageId === ctx.replay.pkg, running: g.packageId === ctx.replay.pkg, replay: true, ...(g.packageId === ctx.replay.pkg ? { versionName: 'Replay', versionCode: null } : {}) })));
@@ -163,6 +210,8 @@ export function createServer(ctx) {
         if (!(await listPackages(ctx.adb, id)).includes(pkg)) return send(res, 404, { error: 'This game is not installed on the selected phone' });
         const owner = qa.activeFor(id);
         if (owner) return send(res, 409, { error: `QA run ${owner.id} is using this phone. Cancel it first.`, runId: owner.id });
+        const installing = installBusy(id);
+        if (installing) return send(res, 409, { error: installing });
         await appActions[action](ctx.adb, id, pkg);
         return send(res, 200, { ok: true });
       }
@@ -287,6 +336,8 @@ export function createServer(ctx) {
         }
         if (req.method === 'POST') {
           const body = await readJson(req);
+          const installing = installBusy(body.serial);
+          if (installing) return send(res, 409, { error: installing });
           try { return send(res, 201, { run: await qa.start({ pkg: body.pkg, serial: body.serial, planId: body.plan, options: body.options ?? {} }) }); }
           catch (err) { return send(res, err.statusCode || 400, { error: err.message, ...(err.runId ? { runId: err.runId } : {}), ...(err.missing ? { missing: err.missing } : {}) }); }
         }
@@ -358,6 +409,11 @@ export function createServer(ctx) {
   };
   ctx.onDevices((devices) => broadcast({ type: 'devices', devices }));
   qa.on('update', (run) => broadcast({ type: 'qa.run', run }));
+  installer.on('update', (job) => broadcast({ type: 'install.job', job }));
+  builds.on('change', (gameId) => broadcast({ type: 'build.source', gameId }));
+  ctx.onDevices((devices) => installer.observeDevices(devices));
+  builds.start();
+  installer.observeDevices(ctx.devices());
   ctx.pairing?.on('update', (state) => broadcast({ type: 'pair', ...state }));
 
   const liveMonitors = new Set();
@@ -607,6 +663,8 @@ export function createServer(ctx) {
       for (const ws of clients) ws.terminate();
       wss.close();
       await snapshooter.close();
+      installer.close();
+      builds.close();
       await qa.close();
       await new Promise((resolve) => server.close(resolve));
       await Promise.allSettled([...pendingCloses]);

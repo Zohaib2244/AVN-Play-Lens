@@ -3,6 +3,27 @@ import type { Command, ServerMessage } from "./types";
 export const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+/** An API failure. Some endpoints add a stable `code` and a `hint` saying what to do. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly hint?: string,
+  ) {
+    super(message);
+  }
+}
+export function apiError(status: number, data: unknown) {
+  const d = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  return new ApiError(
+    "error" in d ? String(d.error) : `Request failed (${status})`,
+    status,
+    typeof d.code === "string" ? d.code : undefined,
+    typeof d.hint === "string" ? d.hint : undefined,
+  );
+}
+
 // Same-origin requests keep the local executable and offline use self-contained.
 export async function api<T = void>(
   path: string,
@@ -19,12 +40,7 @@ export async function api<T = void>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data: unknown = await res.json().catch(() => null);
-  if (!res.ok)
-    throw new Error(
-      data && typeof data === "object" && "error" in data
-        ? String(data.error)
-        : `Request failed (${res.status})`,
-    );
+  if (!res.ok) throw apiError(res.status, data);
   return data as T;
 }
 

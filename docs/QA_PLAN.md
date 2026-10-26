@@ -163,7 +163,7 @@ Status: **Now** = a built-in plan covers it; **Plan** = needs only a YAML plan w
 - **Level-tagged performance.** The SDK already reports the level; attach it to perf samples and screenshots on drops, with device-specific budgets.
 - **More Android lifecycle**: rotation, low memory, permission dialogs, process kill and restore, offline.
 - **AI exploration.** A player driven by screenshots, bridge state and the UI list, with a goal, budget, stop button and action trace. Needs an approved provider and a decision on sending screenshots and logs. Findings stay "suspected" until a deterministic step reproduces them.
-- **APK install from the QA page**, build triggers, issue-tracker export, more phones.
+- Build triggers, issue-tracker export, more phones. (Installing builds is done: see **Builds & install** in the README.)
 
 ## Decisions still open
 

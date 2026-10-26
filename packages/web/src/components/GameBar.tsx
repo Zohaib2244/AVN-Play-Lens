@@ -83,6 +83,7 @@ export function GameBar() {
         items={[
           { label: "Edit name & icon", onClick: () => setEditing(true) },
           { label: "Refresh version", onClick: refreshApps },
+          { label: "Builds & install", onClick: () => setView("builds") },
           {
             label: "Stop game",
             onClick: () => performGameAction(pkg ?? "", "stop"),

@@ -16,4 +16,5 @@ export const TOOLS: NavItem[] = [
   { id: "snapshooter", label: "Level Snapshooter", icon: "grid" },
   { id: "remote-config", label: "Remote Config (RC)", icon: "sliders" },
   { id: "qa", label: "QA runs", icon: "shield" },
+  { id: "builds", label: "Builds & install", icon: "down" },
 ];

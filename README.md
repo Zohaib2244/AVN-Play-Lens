@@ -67,6 +67,19 @@ Each game workspace has a **QA runs** page: pick a plan (plugin smoke, ADB smoke
 
 Bridge-driven plans need the game built with the AVN QA SDK (`packages/unity-qa-sdk`, menu **AVN → QA → Enable QA build**). Hooks a game did not wire are reported as *not supported*, never as passed. See [docs/QA_PLAN.md](docs/QA_PLAN.md) for the design, the step vocabulary and what is still to come.
 
+## Builds & install
+
+Each game workspace has a **Builds & install** page (also in the game menu). Give PlayLens the game's builds one of two ways:
+
+- **A file**: drop or choose an `.apk` / `.aab` (PlayLens keeps a copy under `~/.avn-playlens/artifacts/`), or enter the full path to use the file where it is.
+- **A folder to watch**: the folder the build is written to plus the file name to look for, with `*` for parts that change (`MyGame.apk`, `MyGame-*.aab`, `MyGame.*`). The newest match is used once it has stopped changing for two seconds, so a build still being written is never read.
+
+Every build is checked before it is used: it must be a real APK or app bundle, not a split APK, and its package ID must match the game. A wrong file is reported with what it actually is. **Install** runs these steps and shows each one: find the build, check the phone (Android version and CPU architecture against the build), optionally uninstall, make APKs for the phone (bundles only), install, and confirm the version on the phone. Failures name the reason and the fix: signature mismatch, version downgrade, storage, Play Protect, a prompt on the phone, a dropped Wi-Fi connection, missing tools. When a clean install would fix it, the page offers **Uninstall and install…** after warning that it deletes the game's data on the phone.
+
+**Install automatically** installs a new build when it appears in the watched folder, and installs the build on phones that connect without it. It skips a phone where the installed copy is newer than the build file (for example after Unity's Build and Run), and does not retry a build that already failed on that phone.
+
+App bundles are installed with bundletool, re-signed with `~/.android/debug.keystore` (PlayLens creates its own debug key if there is none). PlayLens uses the bundletool and OpenJDK that ship with Unity's Android Build Support; set `PLAYLENS_BUNDLETOOL` (a `bundletool-all.jar`) or `PLAYLENS_JAVA` to use others. Sources are saved in `~/.avn-playlens/builds.json`; the install history is kept until PlayLens restarts.
+
 ## Develop
 
 See [the automated game QA plan](docs/QA_PLAN.md) for the QA SDK, runner design and roadmap.
@@ -126,7 +139,7 @@ A detected new main game process starts a separate session. Switching between th
 
 ## What gets saved
 
-Everything stays in `~/.avn-playlens/` on your computer: `rules/`, `sessions/` (each log stream gzipped, plus its performance samples, last 50 per game), `reports/` (test-run reports), `devices.json` (paired Wi-Fi phones). Use `--no-record` to skip saving sessions.
+Everything stays in `~/.avn-playlens/` on your computer: `rules/`, `builds.json` and `artifacts/` (build sources and uploaded builds), `sessions/` (each log stream gzipped, plus its performance samples, last 50 per game), `reports/` (test-run reports), `devices.json` (paired Wi-Fi phones). Use `--no-record` to skip saving sessions.
 
 ## Layout
 

@@ -41,6 +41,7 @@ const MAX_LINES = 50000;
 const THROWAWAY_MS = 30000;
 const GAME_VIEWS = new Set([
   "qa",
+  "builds",
   "snapshooter",
   "logs",
   "performance",
@@ -178,6 +179,7 @@ function useAppState() {
   const [perfSummary, setPerfSummary] = useState<PerfSummary | null>(null);
   const [perfVersion, setPerfVersion] = useState(0);
   const [qaVersion, setQaVersion] = useState(0);
+  const [buildsVersion, setBuildsVersion] = useState(0);
   const socket = useRef<ReturnType<typeof connectSocket> | null>(null);
   const streamId = useRef(0);
   const raf = useRef(0);
@@ -229,6 +231,27 @@ function useAppState() {
         return;
       if (msg.type === "run.report") return setLastReport(msg);
       if (msg.type === "qa.run") return setQaVersion((v) => v + 1);
+      if (msg.type === "build.source") return setBuildsVersion((v) => v + 1);
+      if (msg.type === "install.job") {
+        setBuildsVersion((v) => v + 1);
+        const job = msg.job;
+        if (job.status === "done" || job.status === "failed") {
+          // The phone's installed version changed (or may have): re-read it.
+          void query.invalidateQueries({
+            predicate: (q) =>
+              q.queryKey[0] === "api" &&
+              q.queryKey[1] === `devices/${encodeURIComponent(job.serial)}/games`,
+          });
+          // Automatic installs happen without anyone pressing a button, so say how they went.
+          if (job.trigger === "auto")
+            showToast(
+              job.status === "done"
+                ? { kind: "ok", title: `Installed ${job.gameName} on ${job.device}`, msg: `${job.artifact?.name ?? "Latest build"} · v${job.installed?.versionName ?? "?"}` }
+                : { kind: "bad", title: `Could not install ${job.gameName} on ${job.device}`, msg: job.error?.message ?? "The install failed" },
+            );
+        }
+        return;
+      }
       if (
         "streamId" in msg &&
         msg.streamId !== undefined &&
@@ -290,7 +313,7 @@ function useAppState() {
       socket.current?.close();
       cancelAnimationFrame(raf.current);
     };
-  }, [showToast, resetCapture]);
+  }, [showToast, resetCapture, query]);
 
   const reloadGames = useCallback(
     async ({
@@ -622,6 +645,7 @@ function useAppState() {
       perfSummary,
       perfVersion,
       qaVersion,
+      buildsVersion,
       showInLogs: (entryId: number) => {
         setFocusEntry(entryId);
         setView("logs");
@@ -654,6 +678,7 @@ function useAppState() {
       perfSummary,
       perfVersion,
       qaVersion,
+      buildsVersion,
       session,
       captureVersion,
       historyVersion,

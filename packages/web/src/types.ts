@@ -254,6 +254,8 @@ export interface Funnel {
   loadSent: number;
   loaded: number;
   loadFailed: number;
+  showFailed: number;
+  failures: { ts: number; kind: "load" | "show"; reason: string | null; detail: string | null }[];
   showSent: number;
   shown: number;
   displayed: number;

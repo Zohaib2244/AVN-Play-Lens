@@ -13,6 +13,15 @@ const AD_FORMATS = [
   { id: 'mrec', pattern: /^Ad\.Banner\.Mrec$/, label: () => 'MREC' },
 ];
 
+// "code=204 msg=No fill networkCode=3 networkMsg=…" as one readable line.
+function failureDetail(fields) {
+  const parts = [];
+  if (fields.code != null) parts.push(`code ${fields.code}`);
+  if (fields.msg) parts.push(fields.msg);
+  if (fields.networkCode != null || fields.networkMsg) parts.push(`network: ${[fields.networkCode, fields.networkMsg].filter((x) => x != null && x !== '').join(' ')}`);
+  return parts.join(' · ') || null;
+}
+
 const SDK_KEYS = ['SDK.Firebase', 'SDK.AdsProvider', 'SDK.AdMob', 'SDK.RemoteConfig', 'SDK.Purchaser', 'SDK.ByteBrew'];
 
 export class Health {
@@ -57,11 +66,24 @@ export class Health {
     for (const f of AD_FORMATS) {
       const m = f.pattern.exec(key);
       if (m) {
-        this.funnels[key] ??= { key, format: f.id, name: f.label(m), loadSent: 0, loaded: 0, loadFailed: 0, showSent: 0, displayed: 0, shown: 0, closed: 0, paid: 0, revenue: 0, state: null, lastNetwork: null };
+        this.funnels[key] ??= { key, format: f.id, name: f.label(m), loadSent: 0, loaded: 0, loadFailed: 0, showSent: 0, showFailed: 0, failures: [], displayed: 0, shown: 0, closed: 0, paid: 0, revenue: 0, state: null, lastNetwork: null };
         return this.funnels[key];
       }
     }
     return null;
+  }
+
+  // One entry per failed load or show. The SDK callback (code, message, network) arrives just before the
+  // hub counter (reason), so the counter fills in the entry the callback opened instead of adding a second.
+  noteFailure(f, kind, ts, { reason, detail } = {}) {
+    const last = f.failures[f.failures.length - 1];
+    if (last && last.kind === kind && ts - last.ts < 3000 && ((reason && !last.reason) || (detail && !last.detail))) {
+      if (reason) last.reason = reason;
+      if (detail) last.detail = detail;
+      return;
+    }
+    f.failures.push({ ts, kind, reason: reason ?? null, detail: detail ?? null });
+    if (f.failures.length > 25) f.failures.shift();
   }
 
   ingest(e) {
@@ -109,13 +131,16 @@ export class Health {
       this.counters[a.key][a.name] = { value: a.value, reason: a.reason, ts: e.ts };
       const f = this.funnel(a.key);
       if (f) {
-        const map = { LoadCallsSent: 'loadSent', AdsLoaded: 'loaded', LoadCallsFailed: 'loadFailed', ShowCallsSent: 'showSent', AdsDisplayed: 'displayed' };
+        const map = { LoadCallsSent: 'loadSent', AdsLoaded: 'loaded', LoadCallsFailed: 'loadFailed', ShowCallsFailed: 'showFailed', ShowCallsSent: 'showSent', AdsDisplayed: 'displayed' };
         const counterId = `${a.key}:${a.name}`;
         // Plugin counters are process-wide. Count only increments observed in this capture.
         this.counterOffsets[counterId] ??= Math.max(0, a.value - 1);
         if (a.value < previous) this.counterOffsets[counterId] = Math.max(0, a.value - 1);
         const observed = Math.max(0, a.value - this.counterOffsets[counterId]);
         if (map[a.name]) f[map[a.name]] = Math.max(f[map[a.name]], observed);
+        if (a.value > previous && (a.name === 'LoadCallsFailed' || a.name === 'ShowCallsFailed')) {
+          this.noteFailure(f, a.name === 'LoadCallsFailed' ? 'load' : 'show', e.ts, { reason: a.reason || null });
+        }
         const state = { LoadCallsSent: 'Loading', AdsLoaded: 'Loaded', LoadCallsFailed: 'Failed', ShowCallsSent: 'Showing', AdsDisplayed: 'Showed' }[a.name];
         if (state && a.value > previous && e.ts >= (f.stateTs ?? 0)) { f.state = state; f.stateTs = e.ts; }
       }
@@ -135,6 +160,9 @@ export class Health {
           f[metric] = Math.max(f[metric], f.callbackCounts[metric]);
         }
         if (a.fields.network) f.lastNetwork = a.fields.network;
+        if (a.callback === 'LoadFailed' || a.callback === 'DisplayFailed') {
+          this.noteFailure(f, a.callback === 'LoadFailed' ? 'load' : 'show', e.ts, { detail: failureDetail(a.fields) });
+        }
         if (a.callback === 'Displayed') f.shown++;   // the SDK confirming the ad appeared
         if (a.callback === 'Closed') f.closed++;
         if (a.format === 'interstitial' && a.callback === 'Displayed') this.interShows.push({ ts: e.ts, level: this.levelAt(e.ts), closedTs: null });
@@ -147,6 +175,7 @@ export class Health {
       const f = this.funnel(a.format === 'mrec' ? 'Ad.Banner.Mrec' : 'Ad.Banner.Standard');
       if (f && a.what === 'revenue-paid') this.addRevenue(f, a.fields);
       if (f && a.fields.network) f.lastNetwork = a.fields.network;
+      if (f && a.what === 'load-failed') this.noteFailure(f, 'load', e.ts, { detail: failureDetail({ ...a.fields, code: a.code ?? a.fields.code }) });
     } else if (a.kind === 'adapter') {
       this.adapters[a.fields.name] = { status: a.fields.status, adapterVersion: a.fields.adapterVersion, sdkVersion: a.fields.sdkVersion };
     } else if (a.kind === 'adapters') {

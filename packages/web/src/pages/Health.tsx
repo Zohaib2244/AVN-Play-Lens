@@ -326,6 +326,7 @@ export function Health() {
     useApp();
   const [onlyProblems, setOnlyProblems] = useViewState("adapterProblems", true);
   const [allIssues, setAllIssues] = useState(false);
+  const [adReasons, setAdReasons] = useViewState("adFailureReasons", false);
   const h = monitor?.health;
   const head = (sub?: string) => (
     <PageHead
@@ -586,9 +587,18 @@ export function Health() {
       <Panel
         title="Ads this session"
         actions={
-          <span className="mono pl-page-note">
-            ${h.revenue.total.toFixed(4)} reported revenue
-          </span>
+          <>
+            <button
+              className="btn btn-sm"
+              aria-pressed={adReasons}
+              onClick={() => setAdReasons(!adReasons)}
+            >
+              Failure reasons
+            </button>
+            <span className="mono pl-page-note">
+              ${h.revenue.total.toFixed(4)} reported revenue
+            </span>
+          </>
         }
       >
         <div className="t-wrap">
@@ -640,6 +650,16 @@ export function Health() {
                 },
               },
               {
+                id: "show-failed",
+                header: <>Show failed</>,
+                className: "num mono",
+                cell: (f) => (
+                  <span className={f.showFailed ? "badc" : "dim"}>
+                    {f.showFailed}
+                  </span>
+                ),
+              },
+              {
                 id: "col4",
                 header: <>Shown</>,
                 className: "num mono",
@@ -689,6 +709,33 @@ export function Health() {
         </div>
         {!h.funnels.length && (
           <div className="empty">No ad activity observed yet.</div>
+        )}
+        {adReasons && (
+          <div className="pb" style={{ display: "grid", gap: 6 }}>
+            {h.funnels.every((f) => !f.failures?.length) ? (
+              <div className="dim" style={{ fontSize: 13.5 }}>
+                No failures this session.
+              </div>
+            ) : (
+              h.funnels.flatMap((f) =>
+                [...(f.failures ?? [])].reverse().map((x) => (
+                  <div
+                    key={`${f.key}-${x.ts}-${x.kind}`}
+                    style={{ display: "flex", gap: 12, fontSize: 13.5 }}
+                  >
+                    <span className="mono dim">{clock(x.ts, true)}</span>
+                    <span style={{ minWidth: 150 }}>
+                      {f.name} · {x.kind}
+                    </span>
+                    <span className="badc">
+                      {[x.reason, x.detail].filter(Boolean).join(" — ") ||
+                        "No reason logged"}
+                    </span>
+                  </div>
+                )),
+              )
+            )}
+          </div>
         )}
         <div className="pb pl-page-note">
           Paid callbacks provide evidence that an ad was seen.

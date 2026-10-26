@@ -67,6 +67,12 @@ test('monitor: health, flags, Firebase cross-check from the demo capture', async
   const inter = s.health.funnels.find((f) => f.key === 'Ad.Interstitial.0');
   assert.deepEqual([inter.loadSent, inter.loaded, inter.showSent, inter.shown, inter.closed, inter.paid], [1, 1, 2, 2, 2, 2]);
   assert.equal(s.health.funnels.find((f) => f.key === 'Ad.Rewarded').loadFailed, 1);
+  // The callback and the counter describe one failure: one entry carrying both the code and the reason.
+  const rewardedFailures = s.health.funnels.find((f) => f.key === 'Ad.Rewarded').failures;
+  assert.equal(rewardedFailures.length, 1);
+  assert.equal(rewardedFailures[0].kind, 'load');
+  assert.equal(rewardedFailures[0].reason, 'Rewarded load failed: NoFill');
+  assert.match(rewardedFailures[0].detail, /code NoFill · No Fill · network: 204 No ad to show/);
   assert.ok(Math.abs(s.health.revenue.total - 0.0241) < 1e-9);
   assert.equal(s.health.adapters.find((a) => a.name === 'Moloco').status, 'InitializedFailure');
   assert.equal(s.health.rc.sources.AdIdsConfig, 'Default');
@@ -189,4 +195,21 @@ test('checklist run, rules template, report', async () => {
   const report = m.finishRun();
   assert.equal(report.total, Object.keys(items).length);
   assert.ok(existsSync(join(process.env.HOME, '.avn-playlens', 'reports', `${report.id}.md`)) || report.id);
+});
+
+test('monitor: counter-only failures (MREC, show) keep their reason', async () => {
+  process.env.HOME = mkdtempSync(join(tmpdir(), 'playlens-home-'));
+  const { Monitor } = await import('../src/monitor/monitor.mjs');
+  const m = new Monitor({ rules: rulesWithProfile(null), pkg: PKG, deviceName: 'Test' });
+  const lines = [
+    '1729420800.000 1 1 I Unity   : Counter Ad.Banner.Mrec LoadCallsSent=1 | AVNPLUGIN',
+    '1729420802.000 1 1 I Unity   : Counter Ad.Banner.Mrec LoadCallsFailed=1 reason=MREC load failed: NetworkError | AVNPLUGIN',
+    '1729420810.000 1 1 I Unity   : Counter Ad.Banner.Mrec ShowCallsFailed=1 reason=Not ready yet | AVNPLUGIN',
+  ];
+  const g = new Grouper((e) => m.ingest({ ...classify(e, PKG), id: 1 }));
+  for (const l of lines) g.push(parseLogcatLine(l));
+  g.flush();
+  const f = m.snapshot(1729420900000).health.funnels.find((x) => x.key === 'Ad.Banner.Mrec');
+  assert.deepEqual([f.loadFailed, f.showFailed], [1, 1]);
+  assert.deepEqual(f.failures.map((x) => [x.kind, x.reason]), [['load', 'MREC load failed: NetworkError'], ['show', 'Not ready yet']]);
 });

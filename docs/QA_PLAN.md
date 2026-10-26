@@ -67,6 +67,17 @@ The import should preserve individual cases, durations, skipped cases, failure m
 
 Keep test-player build identity separate from an ordinary QA APK's identity. Correlate results with a PlayLens run ID and device/build metadata; attaching unrelated XML must not verify a live session. Store Unity logs even when compilation or deployment fails.
 
+## Other Unity-side options considered
+
+UTF is the baseline because it is Unity's own runner and its XML output is easy to import. Two other tools were compared:
+
+- **AltTester:** a third-party tool that inspects and drives a running game over a socket. Its documentation describes reaching an Android build with `adb forward` (default port 13000), which is the same transport proposed for the QA Bridge. It could replace the custom bridge's object lookup and input commands, at the cost of an external dependency and a debug-only package in each game. Evaluate it in one game before writing a custom bridge, and confirm its current version, licence, and Android and Unity support. See the [AltTester setup guide](https://alttester.com/docs/desktop/v.1.5.1/pages/get-started.html).
+- **Unity Automated QA (`com.unity.automated-testing`):** records and replays UI input, but is limited to Unity UI elements. Its documentation says development was put on hold in December 2021 and that the package will not be updated for newer Unity versions. Do not build on it. See the [package documentation](https://docs.unity3d.com/Packages/com.unity.automated-testing@latest).
+
+The QA Bridge protocol should stay narrow enough that its transport could later be swapped for AltTester or kept custom, without changing plans, reports or the runner.
+
+These notes come from package documentation, not from running either tool against the games. Treat compatibility as unverified until tried.
+
 ## Proposed architecture
 
 Add a server-owned QA runner in `packages/server/src/qa/` and a QA Runs view inside each game's workspace. The runner owns device actions, step deadlines, evidence and the final result. It uses the current monitor and recorder for observations.

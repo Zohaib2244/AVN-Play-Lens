@@ -6,11 +6,12 @@ import {
   Tag,
   type StatusKind,
 } from "@avn/ui";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api, ApiError, apiError, errorMessage } from "../api";
 import { PageHead } from "../components/bits";
 import { SkeletonRows, Spinner } from "../components/ui";
-import { refreshResource, useResource } from "../query";
+import { refreshResource } from "../query";
+import { useBuildState } from "../use-build-state";
 import { clock, deviceName, useApp } from "../state";
 import type { BuildState, InstallJob, InstallStep } from "../types";
 
@@ -144,10 +145,15 @@ function SourceForm({ path, state, onDone, onCancel }: { path: string; state: Bu
           setError(null);
         }}
         options={[
-          { value: "folder", label: "A folder to watch" },
-          { value: "file", label: "A file" },
+          { value: "folder", label: "Watch a folder" },
+          { value: "file", label: "Single APK or AAB" },
         ]}
       />
+      <p className="dim">
+        {kind === "folder"
+          ? "Watch a build folder for new APK or AAB files. PlayLens uses the newest matching build."
+          : "Use one APK or AAB build. To pick up new builds from a folder, choose Watch a folder."}
+      </p>
       {kind === "file" ? (
         <>
           <label
@@ -333,16 +339,13 @@ function JobCard({ job, latest, onRetry, onUninstallRetry, onCancel }: { job: In
 }
 
 export function Builds() {
-  const { game, serial, device, online, gameInventory, buildsVersion, showToast } = useApp();
+  const { game, serial, device, online, gameInventory, showToast } = useApp();
   const path = `builds/${encodeURIComponent(game?.id ?? "")}`;
-  const query = useResource<BuildState>(path, { enabled: !!game });
+  const query = useBuildState(game?.id);
   const [editing, setEditing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [confirmClean, setConfirmClean] = useState(false);
   const [actionError, setActionError] = useState<FieldError | null>(null);
-  useEffect(() => {
-    if (buildsVersion) void refreshResource(path);
-  }, [buildsVersion, path]);
 
   const state = query.data;
   const refresh = () => refreshResource(path);
@@ -560,7 +563,7 @@ export function Builds() {
           !editing && (
             <span className="row-wrap">
               <Button size="sm" onClick={() => setEditing(true)}>
-                Change
+                Change source
               </Button>
               <Button size="sm" variant="ghost" onClick={removeSource}>
                 {source.type === "file" && source.uploaded ? "Remove (deletes the uploaded copy)" : "Remove"}

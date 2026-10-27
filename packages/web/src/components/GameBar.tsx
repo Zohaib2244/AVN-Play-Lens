@@ -5,6 +5,7 @@ import { deviceName, useApp } from "../state";
 import { GameEditor } from "./GameEditor";
 import { GameIcon } from "./GameIcon";
 import { Menu } from "./ui";
+import { useBuildState } from "../use-build-state";
 import { DialogShell } from "@avn/ui";
 import { useTracking, type Tracking } from "./TrackingGate";
 
@@ -13,21 +14,18 @@ import { useTracking, type Tracking } from "./TrackingGate";
 export function GameBar() {
   const {
     game,
-    games,
     pkg,
     device,
     devices,
     serial,
     selectDevice,
     setView,
-    openGame,
     online,
     gameInventory,
     actionBusy,
     performGameAction,
     refreshApps,
     reloadGames,
-    stopped,
     setStopped,
     stream,
     session,
@@ -36,6 +34,10 @@ export function GameBar() {
     newSession,
     viewGameSessions,
   } = useApp();
+  const builds = useBuildState(game?.id);
+  const activeInstall = builds.data?.jobs?.find((job) =>
+    job.gameId === game?.id && (job.status === "running" || job.status === "queued"),
+  );
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
@@ -70,6 +72,7 @@ export function GameBar() {
         align="start"
         trigger={
           <>
+            {activeInstall && <span className="spinner sm" aria-hidden="true" />}
             <GameIcon game={game} size={26} />
             <span className="game-bar-text">
               <strong>{game.name}</strong>
@@ -89,14 +92,6 @@ export function GameBar() {
             onClick: () => performGameAction(pkg ?? "", "stop"),
             hidden: !canAct || !running,
           },
-          games.length > 1 ? { sep: true } : null,
-          games.length > 1 ? { heading: "Switch game" } : null,
-          ...games
-            .filter((g) => g.packageId !== pkg)
-            .map((g) => ({
-              label: g.name,
-              onClick: () => openGame(g.packageId),
-            })),
           { sep: true },
           { label: "Library", onClick: () => setView("home") },
           {
@@ -106,6 +101,19 @@ export function GameBar() {
           },
         ]}
       />
+      {activeInstall && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="game-bar-install"
+          aria-label={`${activeInstall.status === "queued" ? "Install queued" : "Installing"} on ${activeInstall.device}. View install details`}
+          onClick={() => setView("builds")}
+        >
+          <span role="status">
+            {activeInstall.status === "queued" ? "Install queued" : "Installing"} · {activeInstall.device}
+          </span>
+        </Button>
+      )}
       <Menu
         label="Phone"
         className="game-bar-chip"
@@ -199,7 +207,17 @@ export function GameBar() {
             loadingLabel="Starting…"
             onClick={() => performGameAction(pkg ?? "", "launch")}
           >
-            <Icon name="pulse" /> Start game
+            <svg
+              className="ic"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 4l12 8-12 8z" />
+            </svg> Start game
           </Button>
         )}
       </span>

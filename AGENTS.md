@@ -26,3 +26,5 @@ Design: follow AVN-Style (SKILL.md in the AVN-Style repo). UX: avn-ux · Style: 
 - Expand config fields with broad named controls and show structured values across the available width. Missing/static fallbacks are explicit errors with plain source labels.
 - Command rows have content-driven height, consistent title/package spacing and game artwork; omit repeated action hints and current-game suffixes.
 - Auto-reconnect saves keep connection buttons, card geometry and selection stable.
+
+- Keep queued/running game installs visible beside the persistent game heading across sections; use a play icon for Start game and explicit Watch a folder / Single APK or AAB source labels.

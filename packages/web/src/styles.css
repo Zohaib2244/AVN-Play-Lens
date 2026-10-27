@@ -471,6 +471,7 @@ body:has(.pl-notifications) .toasts { visibility: hidden; }
 .game-bar-chip:hover { border-color: var(--line-strong); }
 .game-bar-chip .dot { flex: none; }
 .game-bar-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-bar-install { max-width: 100%; height: auto; min-height: 36px; text-align: left; overflow-wrap: anywhere; color: var(--info); }
 .game-bar-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .game-bar-chip.ok { color: var(--ok); }
 .game-bar-chip.warn { color: var(--warn); }

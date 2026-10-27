@@ -459,3 +459,57 @@ test("reduced motion, light palette and density are preserved", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await noOverflow(page);
 });
+
+
+test("install status stays visible across sections and build sources explain their purpose", async ({ page }, info) => {
+  let status: "queued" | "running" | "done" = "queued";
+  let pushUpdate: (() => void) | undefined;
+  await page.routeWebSocket(/\/ws/, (socket) => {
+    socket.connectToServer();
+    pushUpdate = () => socket.send(JSON.stringify({ type: "build.source" }));
+  });
+  await page.route("**/api/builds/*", async (route) => {
+    const gameId = decodeURIComponent(new URL(route.request().url()).pathname.split("/").pop()!);
+    await route.fulfill({ json: {
+      source: null, latest: null, status: null, installs: {},
+      jobs: [{ id: "fixture-install", gameId, packageId: "com.avn.demo", gameName: "PlayLens Demo",
+        serial: "fixture-phone", device: "Test phone", trigger: "manual", uninstallFirst: false,
+        status, steps: [], artifact: null, error: null, installed: null,
+        createdAt: Date.now(), startedAt: null, endedAt: null }],
+    } });
+  });
+  await openGame(page);
+  const install = gameBar(page).getByRole("button", { name: /Install queued/ });
+  await expect(install).toBeVisible();
+  await gameBar(page).getByRole("button", { name: "Game", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Switch game" })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Puzzle Garden" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  status = "running";
+  await expect.poll(() => !!pushUpdate).toBe(true);
+  pushUpdate!();
+  await expect(gameBar(page).getByRole("status")).toHaveText("Installing · Test phone");
+  await navigate(page, "Performance");
+  await expect(gameBar(page).getByRole("status")).toHaveText("Installing · Test phone");
+  await noOverflow(page);
+  await page.screenshot({ path: info.outputPath("install-header-dark.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.palette = "moss";
+  });
+  await expect(gameBar(page).locator(".spinner")).toHaveCSS("animation-name", "none");
+  await gameBar(page).getByRole("button", { name: /Installing/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Builds & install", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Watch a folder", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByPlaceholder("~/Projects/MyGame/Builds")).toBeVisible();
+  await page.getByRole("button", { name: "Single APK or AAB", exact: true }).click();
+  await expect(page.getByText("Use one APK or AAB build.", { exact: false })).toBeVisible();
+  await noOverflow(page);
+  await page.screenshot({ path: info.outputPath("build-source-light-moss.png") });
+  status = "done";
+  pushUpdate!();
+  await expect(gameBar(page).getByRole("status")).toHaveCount(0);
+  await expect(gameBar(page).locator(".spinner")).toHaveCount(0);
+});
